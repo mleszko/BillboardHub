@@ -5,6 +5,7 @@ import { Bell, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HubertWidget } from "./HubertWidget";
 
 interface AppShellProps {
   children: ReactNode;
@@ -49,6 +50,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
         </div>
         <main className="flex-1 bg-background">{children}</main>
       </SidebarInset>
+      <HubertWidget />
     </SidebarProvider>
   );
 }

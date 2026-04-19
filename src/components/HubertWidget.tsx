@@ -68,6 +68,12 @@ export function HubertWidget() {
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("hubert:open", onOpen);
+    return () => window.removeEventListener("hubert:open", onOpen);
+  }, []);
+
+  useEffect(() => {
     if (!mounted) return;
     if (messages.length === 0) {
       const name = isDemoMode() ? demoName() : "Witaj";
