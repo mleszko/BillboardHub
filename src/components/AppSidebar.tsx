@@ -24,6 +24,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { BetaBadge } from "./BetaBadge";
+import { useEffect, useState } from "react";
+import { endDemo, isDemoMode } from "@/lib/demo";
+import { useNavigate } from "@tanstack/react-router";
 
 const operations = [
   { title: "Dashboard", url: "/app", icon: LayoutDashboard },
