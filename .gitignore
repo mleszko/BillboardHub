@@ -17,6 +17,7 @@ dist-ssr
 *.local
 frontend/.next
 frontend/node_modules
+backend/.venv
 backend/__pycache__
 backend/**/*.pyc
 backend/billboardhub.db
