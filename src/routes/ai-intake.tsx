@@ -51,7 +51,11 @@ function AIIntakePage() {
   };
 
   return (
-    <AppShell title="AI Intake" subtitle="Automatyczna ekstrakcja danych z umów PDF">
+    <AppShell
+      title="AI Intake"
+      subtitle="Automatyczna ekstrakcja danych z umów PDF"
+      actions={<BetaBadge showIcon />}
+    >
       <div className="mx-auto max-w-4xl space-y-5 p-3 md:p-6">
         {/* Steps indicator */}
         <Card>
