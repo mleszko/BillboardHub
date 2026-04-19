@@ -388,6 +388,3 @@ function Step({ text, done, loading }: { text: string; done?: boolean; loading?:
   );
 }
 
-// Make sure unused imports aren't flagged
-void Label;
-void Input;
