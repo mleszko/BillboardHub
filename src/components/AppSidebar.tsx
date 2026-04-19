@@ -135,6 +135,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
+        <DemoFooter />
         <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
             AK
@@ -146,5 +147,24 @@ export function AppSidebar() {
         </div>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function DemoFooter() {
+  const [demo, setDemo] = useState(false);
+  const navigate = useNavigate();
+  useEffect(() => { setDemo(isDemoMode()); }, []);
+  if (!demo) return null;
+  return (
+    <button
+      onClick={() => { endDemo(); navigate({ to: "/" }); }}
+      className="mb-1 flex items-center justify-between gap-2 rounded-md border border-sidebar-primary/30 bg-sidebar-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-primary/20 group-data-[collapsible=icon]:hidden"
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-sidebar-primary" />
+        Tryb demo
+      </span>
+      <span className="text-sidebar-foreground/60">Wyjdź</span>
+    </button>
   );
 }
