@@ -15,6 +15,11 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+frontend/.next
+frontend/node_modules
+backend/__pycache__
+backend/**/*.pyc
+backend/billboardhub.db
 
 # Wrangler / Cloudflare
 .wrangler/
