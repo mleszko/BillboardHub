@@ -1,5 +1,16 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutDashboard, Map, Package, FileText, Settings, Sparkles, Radio } from "lucide-react";
+import {
+  LayoutDashboard,
+  Map,
+  Package,
+  FileText,
+  Settings,
+  Sparkles,
+  Radio,
+  FileSpreadsheet,
+  Heart,
+  Rocket,
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -12,14 +23,24 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { BetaBadge } from "./BetaBadge";
 
-const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+const operations = [
+  { title: "Dashboard", url: "/app", icon: LayoutDashboard },
   { title: "Map View", url: "/map", icon: Map },
   { title: "Inventory", url: "/inventory", icon: Package },
   { title: "Contracts", url: "/contracts", icon: FileText },
-  { title: "AI Intake", url: "/ai-intake", icon: Sparkles },
   { title: "Settings", url: "/settings", icon: Settings },
+];
+
+const labs = [
+  { title: "AI Intake", url: "/ai-intake", icon: Sparkles, beta: true },
+  { title: "Excel Importer", url: "/import", icon: FileSpreadsheet, beta: true },
+];
+
+const resources = [
+  { title: "Roadmap", url: "/roadmap", icon: Rocket },
+  { title: "Wsparcie", url: "/support", icon: Heart },
 ];
 
 export function AppSidebar() {
