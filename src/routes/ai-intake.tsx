@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Sparkles, FileUp, CheckCircle2, Loader2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { BetaBadge } from "@/components/BetaBadge";
 
 export const Route = createFileRoute("/ai-intake")({
   head: () => ({
@@ -51,7 +52,11 @@ function AIIntakePage() {
   };
 
   return (
-    <AppShell title="AI Intake" subtitle="Automatyczna ekstrakcja danych z umów PDF">
+    <AppShell
+      title="AI Intake"
+      subtitle="Automatyczna ekstrakcja danych z umów PDF"
+      actions={<BetaBadge showIcon />}
+    >
       <div className="mx-auto max-w-4xl space-y-5 p-3 md:p-6">
         {/* Steps indicator */}
         <Card>
