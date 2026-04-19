@@ -2,6 +2,43 @@
 
 This plan is intentionally staged to protect production stability in **Auth Mode** while allowing richer experimentation in **Demo Mode**.
 
+## 8-Hour Autonomous Execution Mode (No Blocking Questions)
+
+To enable uninterrupted delivery, work will proceed under the following operating rules for the next execution window:
+
+### Decision Authority
+- Implementation decisions are autonomous as long as they respect the stack and architectural rules in this plan.
+- Existing mock app code is treated as migration input (not throwaway by default): stable UI pieces are reused, fragile pieces are replaced.
+- Auth Mode reliability always wins over Demo polish.
+- If required secrets/integrations are unavailable, implementation continues with safe fallbacks (`.env.example`, mocks, feature flags) so progress is not blocked.
+
+### Scope Boundaries (What Can Be Decided Without Approval)
+- API contract shapes, internal folder structure, naming, and migration ordering.
+- Validation rules for import pipeline (date/currency normalization, required-field checks).
+- UI workflow details for mapping confirmation and dashboard ergonomics.
+- Demo-mode UX copy/tone for Hubert, as long as it remains domain-limited to billboards/ROI/property strategy.
+
+### Non-Negotiable Guardrails
+- No DB persistence from AI import until user confirms mapping.
+- Demo features remain explicitly mode-gated.
+- Changes are incremental and reversible (small commits, no destructive rewrites).
+- Keep production-safe defaults: Auth Mode enabled by default, Demo Mode opt-in.
+
+### Autonomous Delivery Sequence
+1. Foundation and Auth wiring (backend + frontend integration surface).
+2. AI Excel ingestion and mapping confirmation workflow.
+3. Stable contracts dashboard in Auth Mode.
+4. Demo-only Hubert and visual enhancements.
+5. Deployment docs and infra polish (Docker + Vercel/Railway/Supabase instructions).
+
+### Progress and Safety Protocol
+- Commit and push at each logical checkpoint.
+- Keep PR updated continuously with scope and validation notes.
+- If an ambiguity appears, choose the lowest-risk path that preserves forward momentum.
+- Leave clear TODO markers only for items blocked by external credentials/services.
+
+---
+
 ## Phase 1 — Setup & Auth (Foundation First)
 
 ### Goals
