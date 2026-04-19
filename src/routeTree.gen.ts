@@ -9,16 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as ContractsRouteImport } from './routes/contracts'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as AiIntakeRouteImport } from './routes/ai-intake'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoadmapRoute = RoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MapRoute = MapRouteImport.update({
@@ -31,9 +45,19 @@ const InventoryRoute = InventoryRouteImport.update({
   path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContractsRoute = ContractsRouteImport.update({
   id: '/contracts',
   path: '/contracts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AiIntakeRoute = AiIntakeRouteImport.update({
@@ -50,65 +74,113 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-intake': typeof AiIntakeRoute
+  '/app': typeof AppRoute
   '/contracts': typeof ContractsRoute
+  '/import': typeof ImportRoute
   '/inventory': typeof InventoryRoute
   '/map': typeof MapRoute
+  '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-intake': typeof AiIntakeRoute
+  '/app': typeof AppRoute
   '/contracts': typeof ContractsRoute
+  '/import': typeof ImportRoute
   '/inventory': typeof InventoryRoute
   '/map': typeof MapRoute
+  '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai-intake': typeof AiIntakeRoute
+  '/app': typeof AppRoute
   '/contracts': typeof ContractsRoute
+  '/import': typeof ImportRoute
   '/inventory': typeof InventoryRoute
   '/map': typeof MapRoute
+  '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
+  '/support': typeof SupportRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/ai-intake'
+    | '/app'
     | '/contracts'
+    | '/import'
     | '/inventory'
     | '/map'
+    | '/roadmap'
     | '/settings'
+    | '/support'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ai-intake' | '/contracts' | '/inventory' | '/map' | '/settings'
+  to:
+    | '/'
+    | '/ai-intake'
+    | '/app'
+    | '/contracts'
+    | '/import'
+    | '/inventory'
+    | '/map'
+    | '/roadmap'
+    | '/settings'
+    | '/support'
   id:
     | '__root__'
     | '/'
     | '/ai-intake'
+    | '/app'
     | '/contracts'
+    | '/import'
     | '/inventory'
     | '/map'
+    | '/roadmap'
     | '/settings'
+    | '/support'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiIntakeRoute: typeof AiIntakeRoute
+  AppRoute: typeof AppRoute
   ContractsRoute: typeof ContractsRoute
+  ImportRoute: typeof ImportRoute
   InventoryRoute: typeof InventoryRoute
   MapRoute: typeof MapRoute
+  RoadmapRoute: typeof RoadmapRoute
   SettingsRoute: typeof SettingsRoute
+  SupportRoute: typeof SupportRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roadmap': {
+      id: '/roadmap'
+      path: '/roadmap'
+      fullPath: '/roadmap'
+      preLoaderRoute: typeof RoadmapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/map': {
@@ -125,11 +197,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contracts': {
       id: '/contracts'
       path: '/contracts'
       fullPath: '/contracts'
       preLoaderRoute: typeof ContractsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ai-intake': {
@@ -152,11 +238,24 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiIntakeRoute: AiIntakeRoute,
+  AppRoute: AppRoute,
   ContractsRoute: ContractsRoute,
+  ImportRoute: ImportRoute,
   InventoryRoute: InventoryRoute,
   MapRoute: MapRoute,
+  RoadmapRoute: RoadmapRoute,
   SettingsRoute: SettingsRoute,
+  SupportRoute: SupportRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
