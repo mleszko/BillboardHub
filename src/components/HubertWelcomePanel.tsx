@@ -70,9 +70,10 @@ export function HubertWelcomePanel() {
               : "Przeanalizowałem Twój portfel w Białymstoku."}
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-primary-foreground/85">
-            Twoje <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong> —
-            jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód {formatPLN(s.monthlyRevenue)}/mc.
-            Mam {s.expiring30} pilne sprawy do omówienia.
+            Twoje{" "}
+            <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong> —
+            jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód {formatPLN(s.monthlyRevenue)}
+            /mc. Mam {s.expiring30} pilne sprawy do omówienia.
           </p>
         </div>
 

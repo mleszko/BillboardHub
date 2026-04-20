@@ -35,19 +35,45 @@ export const Route = createRootRoute({
           "Platforma do zarządzania umowami, lokalizacjami i przychodami dla deweloperów budynków.",
       },
       { name: "author", content: "BillboardHub" },
-      { property: "og:title", content: "BillboardHub — centrum operacyjne dla deweloperów budynków" },
+      {
+        property: "og:title",
+        content: "BillboardHub — centrum operacyjne dla deweloperów budynków",
+      },
       {
         property: "og:description",
         content: "Centralny rejestr umów, alerty wygaśnięć i AI-doradca dla deweloperów budynków.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "BillboardHub — centrum operacyjne dla deweloperów budynków" },
-      { name: "description", content: "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków." },
-      { property: "og:description", content: "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków." },
-      { name: "twitter:description", content: "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/17e5b9f3-d656-4389-82d1-d0dc7ab65708/id-preview-2db9c207--504f1868-fe64-49e3-b6aa-51984724422b.lovable.app-1776708536960.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/17e5b9f3-d656-4389-82d1-d0dc7ab65708/id-preview-2db9c207--504f1868-fe64-49e3-b6aa-51984724422b.lovable.app-1776708536960.png" },
+      {
+        name: "twitter:title",
+        content: "BillboardHub — centrum operacyjne dla deweloperów budynków",
+      },
+      {
+        name: "description",
+        content:
+          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+      },
+      {
+        property: "og:description",
+        content:
+          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/17e5b9f3-d656-4389-82d1-d0dc7ab65708/id-preview-2db9c207--504f1868-fe64-49e3-b6aa-51984724422b.lovable.app-1776708536960.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/17e5b9f3-d656-4389-82d1-d0dc7ab65708/id-preview-2db9c207--504f1868-fe64-49e3-b6aa-51984724422b.lovable.app-1776708536960.png",
+      },
     ],
     links: [
       { rel: "icon", type: "image/png", href: "/favicon.png" },

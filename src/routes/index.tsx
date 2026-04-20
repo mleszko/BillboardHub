@@ -25,10 +25,14 @@ export const Route = createFileRoute("/")({
         content:
           "Platforma do zarządzania umowami, wygaśnięciami i przychodami dla deweloperów budynków. Przejrzysty interfejs, AI-doradca Hubert i mapa lokalizacji. Wersja demo dostępna od ręki.",
       },
-      { property: "og:title", content: "BillboardHub — centrum operacyjne dla deweloperów budynków" },
+      {
+        property: "og:title",
+        content: "BillboardHub — centrum operacyjne dla deweloperów budynków",
+      },
       {
         property: "og:description",
-        content: "Centralny rejestr umów, alerty wygaśnięć, mapa lokalizacji i AI-doradca. Demo bez logowania.",
+        content:
+          "Centralny rejestr umów, alerty wygaśnięć, mapa lokalizacji i AI-doradca. Demo bez logowania.",
       },
     ],
   }),
@@ -93,8 +97,9 @@ function LandingPage() {
                 </span>
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
-                Centralny rejestr umów, alerty wygaśnięć, mapa lokalizacji i AI-doradca <strong>Hubert</strong>.
-                Jeden panel dla zespołu komercjalizacji — bez chaosu i dziesiątek zakładek w arkuszu.
+                Centralny rejestr umów, alerty wygaśnięć, mapa lokalizacji i AI-doradca{" "}
+                <strong>Hubert</strong>. Jeden panel dla zespołu komercjalizacji — bez chaosu i
+                dziesiątek zakładek w arkuszu.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button onClick={tryDemo} size="lg" className="gap-2 px-6">
@@ -130,8 +135,10 @@ function LandingPage() {
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-foreground">
                       {heroLead}Twoje{" "}
-                      <span className="font-semibold text-success">ROI jest 15% powyżej średniej regionalnej</span>.
-                      Dobra robota — masz potencjał na +8% przychodu po optymalizacji renewal.
+                      <span className="font-semibold text-success">
+                        ROI jest 15% powyżej średniej regionalnej
+                      </span>
+                      . Dobra robota — masz potencjał na +8% przychodu po optymalizacji renewal.
                     </p>
                   </div>
                 </div>
@@ -167,8 +174,8 @@ function LandingPage() {
                           row.tone === "critical"
                             ? "bg-destructive animate-pulse"
                             : row.tone === "warning"
-                            ? "bg-warning"
-                            : "bg-success"
+                              ? "bg-warning"
+                              : "bg-success"
                         }`}
                       />
                       <span className="font-mono text-[11px] font-semibold text-muted-foreground">
@@ -180,8 +187,8 @@ function LandingPage() {
                           row.tone === "critical"
                             ? "text-destructive"
                             : row.tone === "warning"
-                            ? "text-warning-foreground"
-                            : "text-muted-foreground"
+                              ? "text-warning-foreground"
+                              : "text-muted-foreground"
                         }`}
                       >
                         {row.days}
@@ -252,8 +259,8 @@ function LandingPage() {
             BillboardHub jest teraz <span className="text-success">w pełni darmowy</span>
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground md:text-base">
-            Jesteśmy w fazie beta. Buduj swój portfel, testuj funkcje, daj nam feedback.
-            Modele cenowe pojawią się dopiero po stabilnej wersji 1.0 — i będą uczciwe.
+            Jesteśmy w fazie beta. Buduj swój portfel, testuj funkcje, daj nam feedback. Modele
+            cenowe pojawią się dopiero po stabilnej wersji 1.0 — i będą uczciwe.
           </p>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button onClick={tryDemo} size="lg" className="gap-2">
@@ -272,9 +279,15 @@ function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 text-xs text-muted-foreground sm:flex-row md:px-6">
           <div>© {new Date().getFullYear()} BillboardHub · Podlaskie OOH</div>
           <div className="flex gap-4">
-            <Link to="/roadmap" className="hover:text-foreground">Roadmap</Link>
-            <Link to="/support" className="hover:text-foreground">Wsparcie</Link>
-            <Link to="/app" className="hover:text-foreground">App</Link>
+            <Link to="/roadmap" className="hover:text-foreground">
+              Roadmap
+            </Link>
+            <Link to="/support" className="hover:text-foreground">
+              Wsparcie
+            </Link>
+            <Link to="/app" className="hover:text-foreground">
+              App
+            </Link>
           </div>
         </div>
       </footer>
