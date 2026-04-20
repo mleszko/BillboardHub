@@ -4,13 +4,14 @@
 
 const KEY = "bbhub-demo-mode";
 const NAME_KEY = "bbhub-demo-name";
+const DEFAULT_DEMO_NAME = "Gość";
 
 export function isDemoMode(): boolean {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(KEY) === "1";
 }
 
-export function startDemo(name = "Mateusz") {
+export function startDemo(name = DEFAULT_DEMO_NAME) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY, "1");
   window.localStorage.setItem(NAME_KEY, name);
@@ -23,6 +24,6 @@ export function endDemo() {
 }
 
 export function demoName(): string {
-  if (typeof window === "undefined") return "Mateusz";
-  return window.localStorage.getItem(NAME_KEY) || "Mateusz";
+  if (typeof window === "undefined") return DEFAULT_DEMO_NAME;
+  return window.localStorage.getItem(NAME_KEY) || DEFAULT_DEMO_NAME;
 }

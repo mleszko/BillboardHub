@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 import { demoName, isDemoMode } from "@/lib/demo";
 import { stats, formatPLN } from "@/lib/mock-data";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
+import { useBackendProfile } from "@/hooks/use-backend-profile";
+import { useAuth } from "@/contexts/AuthContext";
+import { resolveUserFirstName } from "@/lib/user-name";
 
 interface Msg {
   id: number;
@@ -123,11 +126,14 @@ export function HubertWidget() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [liveSummary, setLiveSummary] = useState<LiveSummary | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const demo = isDemoMode();
+  const { user, loading: authLoading } = useAuth();
+  const { profile, loading: profileLoading } = useBackendProfile();
 
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!mounted || isDemoMode()) return;
+    if (!mounted || demo) return;
     let alive = true;
     const loadContracts = async () => {
       try {
@@ -168,7 +174,15 @@ export function HubertWidget() {
     return () => {
       alive = false;
     };
-  }, [mounted]);
+  }, [demo, mounted]);
+
+  const firstName = resolveUserFirstName({
+    demo,
+    demoSessionName: demoName(),
+    profileFullName: profile?.full_name,
+    userEmail: user?.email,
+    userMetadata: user?.user_metadata,
+  });
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -177,20 +191,23 @@ export function HubertWidget() {
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || (!demo && (authLoading || profileLoading))) return;
     if (messages.length === 0) {
-      const name = isDemoMode() ? demoName() : "Witaj";
       setMessages([
         {
           id: 1,
           role: "hubert",
-          text: isDemoMode()
-            ? `Cześć ${name}! Przeanalizowałem Twój portfel w Białymstoku. Twoje **ROI jest 15% powyżej średniej** — jesteś profesjonalistą! Zapytaj mnie o cokolwiek związanego ze strategią billboardową.`
-            : `Cześć! Jestem Hubert, Twój doradca ds. billboardów. Odpowiadam na podstawie Twoich realnych kontraktów z konta.`,
+          text: demo
+            ? firstName
+              ? `Cześć ${firstName}! Przeanalizowałem Twój portfel w Białymstoku. Twoje **ROI jest 15% powyżej średniej** — jesteś profesjonalistą! Zapytaj mnie o cokolwiek związanego ze strategią billboardową.`
+              : `Cześć! Przeanalizowałem Twój portfel w Białymstoku. Twoje **ROI jest 15% powyżej średniej** — jesteś profesjonalistą! Zapytaj mnie o cokolwiek związanego ze strategią billboardową.`
+            : firstName
+              ? `Cześć ${firstName}! Jestem Hubert, Twój doradca ds. billboardów. Odpowiadam na podstawie Twoich realnych kontraktów z konta.`
+              : `Cześć! Jestem Hubert, Twój doradca ds. billboardów. Odpowiadam na podstawie Twoich realnych kontraktów z konta.`,
         },
       ]);
     }
-  }, [mounted, messages.length]);
+  }, [authLoading, demo, firstName, mounted, messages.length, profileLoading]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -205,7 +222,7 @@ export function HubertWidget() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setTimeout(() => {
-      const answer = isDemoMode()
+      const answer = demo
         ? hubertReply(text)
         : liveSummary
           ? hubertReplyFromLive(text, liveSummary)

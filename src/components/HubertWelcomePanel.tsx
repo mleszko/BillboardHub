@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { BetaBadge } from "./BetaBadge";
 import { demoName, isDemoMode } from "@/lib/demo";
 import { stats, formatPLN } from "@/lib/mock-data";
+import { useAuth } from "@/contexts/AuthContext";
+import { useBackendProfile } from "@/hooks/use-backend-profile";
+import { resolveUserFirstName } from "@/lib/user-name";
 
 /**
  * Demo-only welcome banner from Hubert. Sits at the top of the dashboard
@@ -12,6 +15,8 @@ import { stats, formatPLN } from "@/lib/mock-data";
 export function HubertWelcomePanel() {
   const [mounted, setMounted] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const { user } = useAuth();
+  const { profile } = useBackendProfile();
 
   useEffect(() => {
     setMounted(true);
@@ -20,7 +25,14 @@ export function HubertWelcomePanel() {
   if (!mounted) return null;
   if (dismissed) return null;
 
-  const name = isDemoMode() ? demoName() : "Mateusz";
+  const demo = isDemoMode();
+  const name = resolveUserFirstName({
+    demo,
+    demoSessionName: demoName(),
+    profileFullName: profile?.full_name,
+    userEmail: user?.email,
+    userMetadata: user?.user_metadata,
+  });
   const s = stats();
 
   const dismiss = () => {
@@ -53,12 +65,15 @@ export function HubertWelcomePanel() {
             <BetaBadge className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground" />
           </div>
           <h2 className="mt-1 text-lg font-semibold leading-snug md:text-xl">
-            {name}, przeanalizowałem Twój portfel w Białymstoku.
+            {name
+              ? `${name}, przeanalizowałem Twój portfel w Białymstoku.`
+              : "Przeanalizowałem Twój portfel w Białymstoku."}
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-primary-foreground/85">
-            Twoje <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong> —
-            jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód {formatPLN(s.monthlyRevenue)}/mc.
-            Mam {s.expiring30} pilne sprawy do omówienia.
+            Twoje{" "}
+            <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong> —
+            jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód {formatPLN(s.monthlyRevenue)}
+            /mc. Mam {s.expiring30} pilne sprawy do omówienia.
           </p>
         </div>
 
