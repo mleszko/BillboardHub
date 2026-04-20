@@ -8,11 +8,25 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useBackendProfile } from "@/hooks/use-backend-profile";
 import { resolveUserFirstName } from "@/lib/user-name";
 
+export type HubertWelcomeMetrics = {
+  total: number;
+  expiring30: number;
+  monthlyRevenue: number;
+  occupancy: number;
+};
+
+type HubertWelcomePanelProps = {
+  /** When set and not in demo mode, copy and numbers come from the real dashboard. */
+  liveSummary?: HubertWelcomeMetrics | null;
+  /** Distinct cities in the current portfolio (optional context line). */
+  portfolioCities?: string[];
+};
+
 /**
- * Demo-only welcome banner from Hubert. Sits at the top of the dashboard
- * when the user is in demo mode, occupies ~20% of viewport visually.
+ * Welcome banner from Hubert at the top of the dashboard.
+ * Demo mode uses scripted Białystok / ROI copy; logged-in users should pass liveSummary.
  */
-export function HubertWelcomePanel() {
+export function HubertWelcomePanel({ liveSummary, portfolioCities }: HubertWelcomePanelProps) {
   const [mounted, setMounted] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const { user } = useAuth();
@@ -33,7 +47,13 @@ export function HubertWelcomePanel() {
     userEmail: user?.email,
     userMetadata: user?.user_metadata,
   });
-  const s = stats();
+  const mockStats = stats();
+  const useLive = !demo && liveSummary != null;
+  const s = useLive ? liveSummary : mockStats;
+  const cityLine =
+    useLive && portfolioCities && portfolioCities.length > 0
+      ? portfolioCities.slice(0, 4).join(", ") + (portfolioCities.length > 4 ? "…" : "")
+      : null;
 
   const dismiss = () => {
     setDismissed(true);
@@ -65,15 +85,42 @@ export function HubertWelcomePanel() {
             <BetaBadge className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground" />
           </div>
           <h2 className="mt-1 text-lg font-semibold leading-snug md:text-xl">
-            {name
-              ? `${name}, przeanalizowałem Twój portfel w Białymstoku.`
-              : "Przeanalizowałem Twój portfel w Białymstoku."}
+            {useLive
+              ? name
+                ? `${name}, tu podsumowanie Twojego portfela na dziś.`
+                : "Tu podsumowanie Twojego portfela na dziś."
+              : name
+                ? `${name}, przeanalizowałem Twój portfel w Białymstoku.`
+                : "Przeanalizowałem Twój portfel w Białymstoku."}
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-primary-foreground/85">
-            Twoje{" "}
-            <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong> —
-            jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód {formatPLN(s.monthlyRevenue)}
-            /mc. Mam {s.expiring30} pilne sprawy do omówienia.
+            {useLive ? (
+              <>
+                Widzisz <strong>{s.total}</strong>{" "}
+                {s.total === 1 ? "aktywny kontrakt" : "aktywnych kontraktów"}, szacowany przychód{" "}
+                <strong>{formatPLN(s.monthlyRevenue)}</strong> miesięcznie oraz{" "}
+                <strong>{s.expiring30}</strong>{" "}
+                {s.expiring30 === 1
+                  ? "umowę wymagającą uwagi w ciągu 30 dni"
+                  : "umów wymagających uwagi w ciągu 30 dni"}
+                {cityLine ? (
+                  <>
+                    .{" "}
+                    <span className="text-primary-foreground/90">
+                      Kontrakty obejmują m.in. {cityLine}.
+                    </span>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <>
+                Twoje{" "}
+                <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong>{" "}
+                — jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód{" "}
+                {formatPLN(s.monthlyRevenue)}
+                /mc. Mam {s.expiring30} pilne sprawy do omówienia.
+              </>
+            )}
           </p>
         </div>
 

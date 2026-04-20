@@ -449,7 +449,7 @@ function AppPage() {
       }
     >
       <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-10">
-        <HubertWelcomePanel />
+        <HubertWelcomePanel liveSummary={summary} portfolioCities={cities} />
         <StatsHeader data={summary} />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
           <div className="lg:col-span-2">
