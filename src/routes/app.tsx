@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { billboards, cities, daysRemaining, formatPLN } from "@/lib/mock-data";
+import { daysRemaining, formatPLN } from "@/lib/mock-data";
+import { useBillboards } from "@/lib/data-store";
 import { format } from "date-fns";
 import {
   Search,
@@ -20,8 +21,13 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   Download,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const TEMPLATE_HREF =
+  "data:text/csv;charset=utf-8,Kod,Miasto,Adres,Klient,Cena_mies_PLN,Data_poczatku,Data_wygasniecia,Typ,Rozmiar%0ABIA-001,Bia%C5%82ystok,al.%20Jana%20Paw%C5%82a%20II%2057,Biedronka,8400,2024-09-01,2026-09-01,LED,12x4%20m";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -41,13 +47,19 @@ type SortKey = "expiry" | "client" | "city" | "price";
 type SortDir = "asc" | "desc";
 
 function AppPage() {
+  const { data: all, ready } = useBillboards();
   const [q, setQ] = useState("");
   const [city, setCity] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("expiry");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
+  const cities = useMemo(
+    () => Array.from(new Set(all.map((b) => b.city))).sort(),
+    [all],
+  );
+
   const contracts = useMemo(() => {
-    const filtered = billboards
+    const filtered = all
       .filter((b) => b.client && b.contractEnd)
       .filter((b) => (city === "all" ? true : b.city === city))
       .filter((b) => {
@@ -79,7 +91,7 @@ function AppPage() {
           );
       }
     });
-  }, [q, city, sortKey, sortDir]);
+  }, [all, q, city, sortKey, sortDir]);
 
   const expiring30 = contracts.filter((b) => {
     const d = daysRemaining(b);
@@ -98,6 +110,16 @@ function AppPage() {
       setSortDir("asc");
     }
   };
+
+  // Empty-state onboarding screen — shown when the user has no data.
+  // Demo mode never lands here because demo injects mock data.
+  if (ready && all.length === 0) {
+    return (
+      <AppShell title="Witaj w BillboardHub" subtitle="Zacznij od zaimportowania portfela">
+        <OnboardingScreen />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell
@@ -126,35 +148,6 @@ function AppPage() {
             label="Wygasają w ciągu 31–60 dni"
           />
         </section>
-
-        {/* Onboarding nudge — show only when truly empty (mock: never here) */}
-        {contracts.length === 0 && (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
-              <FileSpreadsheet className="h-10 w-10 text-muted-foreground" />
-              <h3 className="text-lg font-semibold">Brak umów w portfelu</h3>
-              <p className="max-w-md text-sm text-muted-foreground">
-                Zacznij od zaimportowania pliku Excel z Twoimi umowami albo
-                pobierz szablon, aby zobaczyć wymagany układ kolumn.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button asChild className="gap-2">
-                  <Link to="/import">
-                    <FileSpreadsheet className="h-4 w-4" /> Importuj Excel
-                  </Link>
-                </Button>
-                <Button variant="outline" className="gap-2" asChild>
-                  <a
-                    href="data:text/csv;charset=utf-8,Kod,Miasto,Adres,Klient,Cena_mies_PLN,Data_poczatku,Data_wygasniecia,Typ,Rozmiar%0ABIA-001,Bia%C5%82ystok,al.%20Jana%20Paw%C5%82a%20II%2057,Biedronka,8400,2024-09-01,2026-09-01,LED,12x4%20m"
-                    download="billboardhub_szablon.csv"
-                  >
-                    <Download className="h-4 w-4" /> Pobierz szablon
-                  </a>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Filters */}
         <section className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -289,6 +282,45 @@ function AppPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function OnboardingScreen() {
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-2xl flex-col items-center justify-center px-6 py-16 text-center">
+      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <Sparkles className="h-7 w-7" />
+      </div>
+      <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+        Witaj w BillboardHub
+      </h1>
+      <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
+        Twój portfel jest pusty. Zacznij od zaimportowania danych z Excela —
+        AI rozpozna kolumny i zmapuje je w 90 sekund.
+      </p>
+
+      <div className="mt-10 flex w-full max-w-sm flex-col items-stretch gap-3">
+        <Button asChild size="lg" className="h-12 gap-2 text-base">
+          <Link to="/import">
+            <FileSpreadsheet className="h-5 w-5" />
+            Importuj dane z Excela
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+        <a
+          href={TEMPLATE_HREF}
+          download="billboardhub_szablon.csv"
+          className="inline-flex items-center justify-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Pobierz szablon CSV
+        </a>
+      </div>
+
+      <p className="mt-12 text-xs text-muted-foreground">
+        Twoje dane są oddzielone od trybu demo — tu zobaczysz wyłącznie to, co sam wgrasz.
+      </p>
+    </div>
   );
 }
 

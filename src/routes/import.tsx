@@ -23,6 +23,9 @@ import {
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { appendImported } from "@/lib/data-store";
+import { Link, useNavigate } from "@tanstack/react-router";
+import type { Billboard } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/import")({
   head: () => ({
@@ -72,6 +75,37 @@ const MOCK_COLUMNS: Column[] = [
   { excel: "Wymiary", sample: "6x3 m", guess: "size", confidence: 88 },
   { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
 ];
+
+// Mocked imported rows produced when the user confirms the wizard.
+// In a real build these would come from the parsed file + mapping.
+function buildImportedRows(): Billboard[] {
+  const today = Date.now();
+  const day = 86_400_000;
+  const samples: Array<Partial<Billboard> & { code: string; client: string; days: number; price: number; city: string; address: string }> = [
+    { code: "USR-001", client: "Rossmann", days: 360, price: 5200, city: "Białystok", address: "ul. Lipowa 12" },
+    { code: "USR-002", client: "DM Drogerie", days: 420, price: 4800, city: "Białystok", address: "al. Piłsudskiego 8" },
+    { code: "USR-003", client: "Lewiatan", days: 510, price: 3100, city: "Łomża", address: "ul. Wojska Polskiego 14" },
+    { code: "USR-004", client: "Tesco", days: 25, price: 4400, city: "Suwałki", address: "ul. Kościuszki 71" },
+    { code: "USR-005", client: "Pepco", days: 50, price: 3900, city: "Augustów", address: "ul. Rynek 3" },
+  ];
+  return samples.map((s, i) => ({
+    id: `imported-${today}-${i}`,
+    code: s.code,
+    city: s.city,
+    address: s.address,
+    lat: 53.13,
+    lng: 23.16,
+    type: "Backlight",
+    size: "6 × 3 m",
+    monthlyPrice: s.price,
+    status: s.days <= 30 ? "critical" : s.days <= 60 ? "expiring_soon" : "active",
+    client: s.client,
+    contractStart: new Date(today - 200 * day).toISOString(),
+    contractEnd: new Date(today + s.days * day).toISOString(),
+    creativePhoto: "",
+    dailyImpressions: 20000,
+  }));
+}
 
 function ImportPage() {
   const [stage, setStage] = useState<Stage>("upload");
@@ -348,6 +382,7 @@ function ImportPage() {
                 <Button
                   className="gap-2"
                   onClick={() => {
+                    appendImported(buildImportedRows());
                     toast.success("Zaimportowano 47 nośników do portfela");
                     setStage("done");
                   }}
@@ -371,9 +406,16 @@ function ImportPage() {
                   47 nowych nośników jest już w Twoim rejestrze.
                 </p>
               </div>
-              <Button onClick={reset} variant="outline">
-                Zaimportuj kolejny plik
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button asChild className="gap-2">
+                  <Link to="/app">
+                    Otwórz dashboard <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button onClick={reset} variant="outline">
+                  Zaimportuj kolejny plik
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
