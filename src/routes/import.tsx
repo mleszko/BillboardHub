@@ -118,7 +118,7 @@ function ImportPage() {
     setFileName("portfolio_billboardow_2025.xlsx");
     setStage("analyzing");
     setTimeout(() => {
-      setColumns(MOCK_COLUMNS);
+      setColumns(getMockColumns());
       setStage("mapping");
     }, 1900);
   };
