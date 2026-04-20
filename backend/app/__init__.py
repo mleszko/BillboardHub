@@ -1,0 +1,1 @@
+"""BillboardHub FastAPI application package."""

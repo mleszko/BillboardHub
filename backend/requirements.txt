@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+aiosqlite
+alembic
+pydantic-settings
+python-multipart
+pandas
+openpyxl
+openai
+supabase
+python-jose[cryptography]
+pytest
+httpx
