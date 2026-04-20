@@ -106,15 +106,6 @@ function buildImportedRows(): Billboard[] {
     dailyImpressions: 20000,
   }));
 }
-  { excel: "Adres / lokalizacja", sample: "ul. Lipowa 32", guess: "address", confidence: 95 },
-  { excel: "Najemca", sample: "Orange Polska", guess: "client", confidence: 94 },
-  { excel: "Stawka mies. PLN", sample: "4 200", guess: "monthlyPrice", confidence: 96 },
-  { excel: "Start", sample: "01.03.2024", guess: "contractStart", confidence: 92 },
-  { excel: "Koniec", sample: "28.02.2026", guess: "contractEnd", confidence: 98 },
-  { excel: "Typ konstrukcji", sample: "Backlight", guess: "type", confidence: 90 },
-  { excel: "Wymiary", sample: "6x3 m", guess: "size", confidence: 88 },
-  { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
-];
 
 function ImportPage() {
   const [stage, setStage] = useState<Stage>("upload");
