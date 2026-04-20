@@ -9,12 +9,17 @@ import { Sparkles, FileUp, CheckCircle2, Loader2, FileText } from "lucide-react"
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BetaBadge } from "@/components/BetaBadge";
+import { requireSessionForAppRoute } from "@/lib/require-session";
 
 export const Route = createFileRoute("/ai-intake")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "AI Intake — BillboardHub" },
-      { name: "description", content: "Upload PDF contracts and let AI extract structured data automatically." },
+      {
+        name: "description",
+        content: "Upload PDF contracts and let AI extract structured data automatically.",
+      },
     ],
   }),
   component: AIIntakePage,
@@ -66,19 +71,27 @@ function AIIntakePage() {
               { key: "ai", label: "AI extracts data" },
               { key: "review", label: "Review & save" },
             ].map((step, i) => {
-              const idx = stage === "idle" ? 0 : ["uploading", "processing"].includes(stage) ? 1 : 2;
+              const idx =
+                stage === "idle" ? 0 : ["uploading", "processing"].includes(stage) ? 1 : 2;
               const active = i <= idx;
               return (
                 <div key={step.key} className="flex flex-1 items-center gap-2">
                   <div
                     className={cn(
                       "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                      active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     {i + 1}
                   </div>
-                  <span className={cn("text-xs font-medium md:text-sm", active ? "text-foreground" : "text-muted-foreground")}>
+                  <span
+                    className={cn(
+                      "text-xs font-medium md:text-sm",
+                      active ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
                     {step.label}
                   </span>
                   {i < 2 && (
@@ -185,11 +198,15 @@ function AIIntakePage() {
               </div>
 
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-                <Button variant="ghost" onClick={reset}>Anuluj</Button>
+                <Button variant="ghost" onClick={reset}>
+                  Anuluj
+                </Button>
                 <Button
                   className="gap-2"
                   onClick={() => {
-                    toast.success("Umowa zapisana w systemie", { description: "SUW-001 — Allegro" });
+                    toast.success("Umowa zapisana w systemie", {
+                      description: "SUW-001 — Allegro",
+                    });
                     setStage("done");
                   }}
                 >
@@ -208,9 +225,13 @@ function AIIntakePage() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold">Gotowe!</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Umowa została dodana do rejestru.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Umowa została dodana do rejestru.
+                </p>
               </div>
-              <Button onClick={reset} variant="outline">Przetwórz kolejny dokument</Button>
+              <Button onClick={reset} variant="outline">
+                Przetwórz kolejny dokument
+              </Button>
             </CardContent>
           </Card>
         )}

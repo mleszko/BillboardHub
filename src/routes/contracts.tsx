@@ -1,7 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
-import { billboards, cities, clients, daysRemaining, formatPLN, type Billboard } from "@/lib/mock-data";
+import {
+  billboards,
+  cities,
+  clients,
+  daysRemaining,
+  formatPLN,
+  type Billboard,
+} from "@/lib/mock-data";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,12 +24,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { isDemoMode } from "@/lib/demo";
+import { requireSessionForAppRoute } from "@/lib/require-session";
+import { getBackendAuthHeaders } from "@/lib/backend-auth";
 
 export const Route = createFileRoute("/contracts")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Contracts — BillboardHub" },
-      { name: "description", content: "Smart contract management with renewals, payments, and invoicing." },
+      {
+        name: "description",
+        content: "Smart contract management with renewals, payments, and invoicing.",
+      },
     ],
   }),
   component: ContractsPage,
@@ -56,8 +69,6 @@ type ContractRow = {
   contractEnd: string;
 };
 
-const DEV_USER_ID = "demo-user-1";
-const DEV_USER_EMAIL = "demo@billboardhub.local";
 const API_BASE_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:8000";
@@ -66,9 +77,7 @@ const GLOBAL_SEARCH_KEY = "bbhub:global-search-value";
 function statusFromBackend(contractStatus: string, expiryDate: string): ContractRow["status"] {
   if (contractStatus === "terminated") return "vacant";
   if (contractStatus === "expired") return "critical";
-  const d = Math.ceil(
-    (new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  );
+  const d = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (d <= 30) return "critical";
   if (d <= 60) return "expiring_soon";
   return "active";
@@ -110,10 +119,7 @@ function ContractsPage() {
       try {
         setLoadError(null);
         const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: {
-            "x-dev-user-id": DEV_USER_ID,
-            "x-dev-user-email": DEV_USER_EMAIL,
-          },
+          headers: await getBackendAuthHeaders(),
         });
         if (!response.ok) {
           const text = await response.text();
@@ -180,20 +186,19 @@ function ContractsPage() {
   );
 
   const rows = useMemo(() => {
-    return sourceRows
-      .filter((b) => {
-        if (city !== "all" && b.city !== city) return false;
-        if (client !== "all" && b.client !== client) return false;
-        if (status !== "all" && b.status !== status) return false;
-        const ql = q.toLowerCase();
-        return (
-          !ql ||
-          b.code.toLowerCase().includes(ql) ||
-          b.client.toLowerCase().includes(ql) ||
-          b.city.toLowerCase().includes(ql) ||
-          b.address.toLowerCase().includes(ql)
-        );
-      });
+    return sourceRows.filter((b) => {
+      if (city !== "all" && b.city !== city) return false;
+      if (client !== "all" && b.client !== client) return false;
+      if (status !== "all" && b.status !== status) return false;
+      const ql = q.toLowerCase();
+      return (
+        !ql ||
+        b.code.toLowerCase().includes(ql) ||
+        b.client.toLowerCase().includes(ql) ||
+        b.city.toLowerCase().includes(ql) ||
+        b.address.toLowerCase().includes(ql)
+      );
+    });
   }, [sourceRows, q, city, client, status]);
 
   return (
@@ -206,7 +211,9 @@ function ContractsPage() {
         )}
         {!ready && (
           <Card>
-            <CardContent className="p-4 text-sm text-muted-foreground">Ładowanie kontraktów...</CardContent>
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              Ładowanie kontraktów...
+            </CardContent>
           </Card>
         )}
         {/* Filters */}
@@ -227,21 +234,35 @@ function ContractsPage() {
             </div>
             <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-1 lg:justify-end">
               <Select value={city} onValueChange={setCity}>
-                <SelectTrigger className="w-full lg:w-40"><SelectValue placeholder="Miasto" /></SelectTrigger>
+                <SelectTrigger className="w-full lg:w-40">
+                  <SelectValue placeholder="Miasto" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Wszystkie miasta</SelectItem>
-                  {cityOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {cityOptions.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={client} onValueChange={setClient}>
-                <SelectTrigger className="w-full lg:w-44"><SelectValue placeholder="Klient" /></SelectTrigger>
+                <SelectTrigger className="w-full lg:w-44">
+                  <SelectValue placeholder="Klient" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Wszyscy klienci</SelectItem>
-                  {clientOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {clientOptions.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-full lg:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger className="w-full lg:w-44">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Wszystkie statusy</SelectItem>
                   <SelectItem value="active">Aktywne</SelectItem>
@@ -256,7 +277,9 @@ function ContractsPage() {
         {/* Mobile cards / Desktop table */}
         <div className="space-y-2 md:hidden">
           {rows.map((b) => {
-            const d = Math.ceil((new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            const d = Math.ceil(
+              (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+            );
             const total = 365;
             const progress = Math.max(0, Math.min(100, (d / total) * 100));
             return (
@@ -266,7 +289,9 @@ function ContractsPage() {
                     <div className="min-w-0">
                       <div className="font-mono text-[11px] text-muted-foreground">{b.code}</div>
                       <div className="font-semibold leading-tight">{b.client}</div>
-                      <div className="truncate text-xs text-muted-foreground">{b.city} · {b.address}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {b.city} · {b.address}
+                      </div>
                     </div>
                     <StatusBadge status={b.status} />
                   </div>
@@ -278,11 +303,19 @@ function ContractsPage() {
                     <Progress value={progress} className="h-1.5" />
                   </div>
                   <div className="flex items-center justify-between border-t pt-3">
-                    <div className="text-sm font-semibold tabular-nums">{formatPLN(b.monthlyPrice)}/mc</div>
+                    <div className="text-sm font-semibold tabular-nums">
+                      {formatPLN(b.monthlyPrice)}/mc
+                    </div>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="h-8 w-8"><FileSignature className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8"><Send className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8"><FileText className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                        <FileSignature className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                        <Send className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                        <FileText className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -307,7 +340,9 @@ function ContractsPage() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((b) => {
-                  const d = Math.ceil((new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                  const d = Math.ceil(
+                    (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                  );
                   const total = 365;
                   const progress = Math.max(0, Math.min(100, (d / total) * 100));
                   return (
@@ -323,7 +358,9 @@ function ContractsPage() {
                         <div className="font-medium">{b.city}</div>
                         <div className="text-xs text-muted-foreground">{b.address}</div>
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={b.status} />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="mb-1 flex justify-between text-[11px]">
                           <span className="text-muted-foreground">{b.size}</span>
@@ -331,16 +368,36 @@ function ContractsPage() {
                         </div>
                         <Progress value={progress} className="h-1.5" />
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatPLN(b.monthlyPrice)}</td>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                        {formatPLN(b.monthlyPrice)}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled title="Wkrótce">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5"
+                            disabled
+                            title="Wkrótce"
+                          >
                             <FileSignature className="h-3.5 w-3.5" /> Renew
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-8 gap-1.5" disabled title="Wkrótce">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 gap-1.5"
+                            disabled
+                            title="Wkrótce"
+                          >
                             <Send className="h-3.5 w-3.5" /> Pay
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8" disabled title="Wkrótce">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            disabled
+                            title="Wkrótce"
+                          >
                             <Download className="h-4 w-4" />
                           </Button>
                         </div>

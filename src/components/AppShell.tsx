@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { isDemoMode } from "@/lib/demo";
 import { stats } from "@/lib/mock-data";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { getBackendAuthHeaders } from "@/lib/backend-auth";
 
 interface AppShellProps {
   children: ReactNode;
@@ -24,8 +25,6 @@ type ContractsResponse = {
   }>;
 };
 
-const DEV_USER_ID = "demo-user-1";
-const DEV_USER_EMAIL = "demo@billboardhub.local";
 const API_BASE_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:8000";
@@ -46,10 +45,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
       }
       try {
         const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: {
-            "x-dev-user-id": DEV_USER_ID,
-            "x-dev-user-email": DEV_USER_EMAIL,
-          },
+          headers: await getBackendAuthHeaders(),
         });
         if (!response.ok) return;
         const payload = (await response.json()) as ContractsResponse;
@@ -85,9 +81,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
           <SidebarTrigger className="-ml-1" />
           <div className="hidden min-w-0 flex-1 md:block">
             <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
-            {subtitle && (
-              <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-            )}
+            {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
           </div>
           <div className="flex flex-1 items-center justify-end gap-2 md:flex-initial">
             <div className="relative hidden md:block">
@@ -100,17 +94,13 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
                   const value = e.target.value;
                   setGlobalSearch(value);
                   window.sessionStorage.setItem(GLOBAL_SEARCH_KEY, value);
-                  window.dispatchEvent(
-                    new CustomEvent("bbhub:global-search", { detail: value }),
-                  );
+                  window.dispatchEvent(new CustomEvent("bbhub:global-search", { detail: value }));
                 }}
                 onKeyDown={(e) => {
                   if (e.key !== "Enter") return;
                   const query = (e.currentTarget.value || "").trim();
                   window.sessionStorage.setItem(GLOBAL_SEARCH_KEY, query);
-                  window.dispatchEvent(
-                    new CustomEvent("bbhub:global-search", { detail: query }),
-                  );
+                  window.dispatchEvent(new CustomEvent("bbhub:global-search", { detail: query }));
                   if (location.pathname !== "/contracts") {
                     navigate({ to: "/contracts" });
                   }

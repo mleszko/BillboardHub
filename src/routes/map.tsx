@@ -7,12 +7,18 @@ import { Billboard, billboards } from "@/lib/mock-data";
 import { Card, CardContent } from "@/components/ui/card";
 import { DemoPreviewBadge } from "@/components/DemoPreviewBadge";
 import { isDemoMode } from "@/lib/demo";
+import { requireSessionForAppRoute } from "@/lib/require-session";
+import { getBackendAuthHeaders } from "@/lib/backend-auth";
 
 export const Route = createFileRoute("/map")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Map View — BillboardHub" },
-      { name: "description", content: "Interactive geospatial map of all billboards with live contract status." },
+      {
+        name: "description",
+        content: "Interactive geospatial map of all billboards with live contract status.",
+      },
     ],
   }),
   component: MapPage,
@@ -45,8 +51,6 @@ type ContractsResponse = {
   items: BackendContract[];
 };
 
-const DEV_USER_ID = "demo-user-1";
-const DEV_USER_EMAIL = "demo@billboardhub.local";
 const API_BASE_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:8000";
@@ -72,9 +76,7 @@ const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
 function statusFromBackend(contractStatus: string, expiryDate: string): Billboard["status"] {
   if (contractStatus === "terminated") return "vacant";
   if (contractStatus === "expired") return "critical";
-  const d = Math.ceil(
-    (new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  );
+  const d = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (d <= 30) return "critical";
   if (d <= 60) return "expiring_soon";
   return "active";
@@ -141,10 +143,7 @@ function MapPage() {
       try {
         setLoadError(null);
         const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: {
-            "x-dev-user-id": DEV_USER_ID,
-            "x-dev-user-email": DEV_USER_EMAIL,
-          },
+          headers: await getBackendAuthHeaders(),
         });
         if (!response.ok) {
           const text = await response.text();
@@ -226,7 +225,9 @@ function MapPage() {
         )}
         {!ready && (
           <Card className="absolute left-4 right-4 top-4 z-[400] md:left-6 md:max-w-md">
-            <CardContent className="p-3 text-xs text-muted-foreground">Ładowanie mapy...</CardContent>
+            <CardContent className="p-3 text-xs text-muted-foreground">
+              Ładowanie mapy...
+            </CardContent>
           </Card>
         )}
         <BillboardMap
@@ -255,17 +256,9 @@ function MapPage() {
         <Card className="pointer-events-auto absolute right-4 top-4 z-[400] hidden gap-3 p-3 shadow-lg md:right-6 md:flex">
           <Stat label="Total" value={mapRows.length.toString()} />
           <Divider />
-          <Stat
-            label="Aktywne"
-            value={activeCount.toString()}
-            tone="success"
-          />
+          <Stat label="Aktywne" value={activeCount.toString()} tone="success" />
           <Divider />
-          <Stat
-            label="Krytyczne"
-            value={criticalCount.toString()}
-            tone="destructive"
-          />
+          <Stat label="Krytyczne" value={criticalCount.toString()} tone="destructive" />
         </Card>
 
         <BillboardDetailPanel billboard={selected} open={open} onOpenChange={setOpen} />
@@ -274,7 +267,15 @@ function MapPage() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "success" | "destructive" }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "destructive";
+}) {
   return (
     <div className="text-center">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>

@@ -7,6 +7,7 @@ import { MessageCircle, X, Send, Bot, User as UserIcon, Info } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { demoName, isDemoMode } from "@/lib/demo";
 import { stats, formatPLN } from "@/lib/mock-data";
+import { getBackendAuthHeaders } from "@/lib/backend-auth";
 
 interface Msg {
   id: number;
@@ -34,13 +35,14 @@ interface LiveSummary {
   topExpiring: { advertiser: string; ref: string | null; days: number } | null;
 }
 
-const DEV_USER_ID = "demo-user-1";
-const DEV_USER_EMAIL = "demo@billboardhub.local";
 const API_BASE_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:8000";
 
-const SCRIPTED: { match: RegExp; reply: (ctx: ReturnType<typeof stats>, name: string) => string }[] = [
+const SCRIPTED: {
+  match: RegExp;
+  reply: (ctx: ReturnType<typeof stats>, name: string) => string;
+}[] = [
   {
     match: /(roi|zwrot|zysk)/i,
     reply: (s) =>
@@ -78,7 +80,9 @@ function hubertReply(input: string): string {
     if (rule.match.test(input)) return rule.reply(ctx, name);
   }
   // Heuristic: if message has no billboard-related keyword at all → off-topic
-  if (!/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|bia-|suw-|lom-|aug-)/i.test(input)) {
+  if (
+    !/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|bia-|suw-|lom-|aug-)/i.test(input)
+  ) {
     return OFFTOPIC_REPLY;
   }
   return `Analizuję dane portfela… Twoja sytuacja wygląda stabilnie: ${ctx.occupancy}% obłożenia, ${formatPLN(ctx.monthlyRevenue)} przychodu/mc. Doprecyzuj pytanie — interesuje Cię ROI, wygasające umowy, ceny czy strategia?`;
@@ -102,7 +106,11 @@ function hubertReplyFromLive(input: string, summary: LiveSummary): string {
   if (/(roi|zwrot|zysk)/i.test(input)) {
     return "Na tym etapie mogę oszacować trendy z Twoich kontraktów i wygaśnięć. Jeśli chcesz, policzę prostą estymację ROI dla wybranych lokalizacji.";
   }
-  if (!/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|roi|wygas|cena|obłoż)/i.test(input)) {
+  if (
+    !/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|roi|wygas|cena|obłoż)/i.test(
+      input,
+    )
+  ) {
     return OFFTOPIC_REPLY;
   }
   return `Widzę obecnie ${summary.total} kontraktów, ${summary.expiring30} pilnych wygaśnięć i przychód ${formatPLN(summary.monthlyRevenue)}/mc. Doprecyzuj: renewal, ceny czy priorytety na ten tydzień?`;
@@ -124,10 +132,7 @@ export function HubertWidget() {
     const loadContracts = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: {
-            "x-dev-user-id": DEV_USER_ID,
-            "x-dev-user-email": DEV_USER_EMAIL,
-          },
+          headers: await getBackendAuthHeaders(),
         });
         if (!response.ok) return;
         const payload = (await response.json()) as ContractsResponse;
@@ -139,9 +144,7 @@ export function HubertWidget() {
           days: Math.ceil((new Date(item.expiry_date).getTime() - now) / (1000 * 60 * 60 * 24)),
         }));
         const expiring30 = withDays.filter((i) => i.days <= 30).length;
-        const topExpiring = withDays
-          .filter((i) => i.days >= 0)
-          .sort((a, b) => a.days - b.days)[0];
+        const topExpiring = withDays.filter((i) => i.days >= 0).sort((a, b) => a.days - b.days)[0];
         const monthlyRevenue = withDays.reduce((sum, i) => sum + (i.monthly_rent_net || 0), 0);
         const occupancy = items.length > 0 ? 100 : 0;
         setLiveSummary({
@@ -205,12 +208,9 @@ export function HubertWidget() {
       const answer = isDemoMode()
         ? hubertReply(text)
         : liveSummary
-        ? hubertReplyFromLive(text, liveSummary)
-        : "Ładuję Twoje dane kontraktowe. Spróbuj ponownie za kilka sekund.";
-      setMessages((m) => [
-        ...m,
-        { id: Date.now() + 1, role: "hubert", text: answer },
-      ]);
+          ? hubertReplyFromLive(text, liveSummary)
+          : "Ładuję Twoje dane kontraktowe. Spróbuj ponownie za kilka sekund.";
+      setMessages((m) => [...m, { id: Date.now() + 1, role: "hubert", text: answer }]);
     }, 600);
   };
 
@@ -262,10 +262,7 @@ export function HubertWidget() {
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={cn(
-                  "flex gap-2",
-                  m.role === "user" ? "flex-row-reverse" : "flex-row",
-                )}
+                className={cn("flex gap-2", m.role === "user" ? "flex-row-reverse" : "flex-row")}
               >
                 <div
                   className={cn(
@@ -275,7 +272,11 @@ export function HubertWidget() {
                       : "bg-primary text-primary-foreground",
                   )}
                 >
-                  {m.role === "user" ? <UserIcon className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
+                  {m.role === "user" ? (
+                    <UserIcon className="h-3 w-3" />
+                  ) : (
+                    <Bot className="h-3 w-3" />
+                  )}
                 </div>
                 <div
                   className={cn(

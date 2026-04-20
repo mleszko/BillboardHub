@@ -32,11 +32,14 @@ import {
 import { cn } from "@/lib/utils";
 import { isDemoMode } from "@/lib/demo";
 import { useBillboards } from "@/lib/data-store";
+import { requireSessionForAppRoute } from "@/lib/require-session";
+import { getBackendAuthHeaders } from "@/lib/backend-auth";
 
 const TEMPLATE_HREF =
   "data:text/csv;charset=utf-8,Kod,Miasto,Adres,Klient,Cena_mies_PLN,Data_poczatku,Data_wygasniecia,Typ,Rozmiar%0ABIA-001,Bia%C5%82ystok,al.%20Jana%20Paw%C5%82a%20II%2057,Biedronka,8400,2024-09-01,2026-09-01,LED,12x4%20m";
 
 export const Route = createFileRoute("/app")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Umowy — BillboardHub" },
@@ -93,17 +96,13 @@ type ActivityItem = {
   amount?: number;
 };
 
-const DEV_USER_ID = "demo-user-1";
-const DEV_USER_EMAIL = "demo@billboardhub.local";
 const API_BASE_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:8000";
 const GLOBAL_SEARCH_KEY = "bbhub:global-search-value";
 
 function daysRemainingFromIso(isoDate: string): number {
-  return Math.ceil(
-    (new Date(isoDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  );
+  return Math.ceil((new Date(isoDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 function toStatusBadge(
@@ -155,10 +154,7 @@ function AppPage() {
       try {
         setLoadError(null);
         const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: {
-            "x-dev-user-id": DEV_USER_ID,
-            "x-dev-user-email": DEV_USER_EMAIL,
-          },
+          headers: await getBackendAuthHeaders(),
         });
         if (!response.ok) {
           const text = await response.text();
@@ -444,7 +440,9 @@ function AppPage() {
           <Button asChild size="sm" variant="outline" className="gap-1.5">
             <Link to="/import">
               <FileSpreadsheet className="h-4 w-4" />
-              <span className="hidden sm:inline">{demo ? "Załaduj demo plik" : "Importuj Excel"}</span>
+              <span className="hidden sm:inline">
+                {demo ? "Załaduj demo plik" : "Importuj Excel"}
+              </span>
             </Link>
           </Button>
         </div>
@@ -466,16 +464,8 @@ function AppPage() {
           </Card>
         )}
         <section className="grid gap-3 sm:grid-cols-2">
-          <AlertCard
-            tone="critical"
-            count={expiring30.length}
-            label="Wygasają w ciągu 30 dni"
-          />
-          <AlertCard
-            tone="warning"
-            count={expiring60.length}
-            label="Wygasają w ciągu 31–60 dni"
-          />
+          <AlertCard tone="critical" count={expiring30.length} label="Wygasają w ciągu 30 dni" />
+          <AlertCard tone="warning" count={expiring60.length} label="Wygasają w ciągu 31–60 dni" />
         </section>
 
         {/* Filters */}
@@ -511,9 +501,7 @@ function AppPage() {
         {/* Table — Zen minimal */}
         <section>
           <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              {contracts.length} umów
-            </h2>
+            <h2 className="text-sm font-medium text-muted-foreground">{contracts.length} umów</h2>
             <span className="text-[11px] text-muted-foreground">
               Kliknij nagłówek, aby sortować
             </span>
@@ -558,16 +546,37 @@ function AppPage() {
               <thead>
                 <tr className="border-b bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-3">
-                    <SortBtn label="Lokalizacja" active={sortKey === "city"} dir={sortDir} onClick={() => setSort("city")} />
+                    <SortBtn
+                      label="Lokalizacja"
+                      active={sortKey === "city"}
+                      dir={sortDir}
+                      onClick={() => setSort("city")}
+                    />
                   </th>
                   <th className="px-4 py-3">
-                    <SortBtn label="Klient" active={sortKey === "client"} dir={sortDir} onClick={() => setSort("client")} />
+                    <SortBtn
+                      label="Klient"
+                      active={sortKey === "client"}
+                      dir={sortDir}
+                      onClick={() => setSort("client")}
+                    />
                   </th>
                   <th className="px-4 py-3">
-                    <SortBtn label="Wygaśnięcie" active={sortKey === "expiry"} dir={sortDir} onClick={() => setSort("expiry")} />
+                    <SortBtn
+                      label="Wygaśnięcie"
+                      active={sortKey === "expiry"}
+                      dir={sortDir}
+                      onClick={() => setSort("expiry")}
+                    />
                   </th>
                   <th className="px-4 py-3 text-right">
-                    <SortBtn label="Cena/mc" active={sortKey === "price"} dir={sortDir} onClick={() => setSort("price")} alignRight />
+                    <SortBtn
+                      label="Cena/mc"
+                      active={sortKey === "price"}
+                      dir={sortDir}
+                      onClick={() => setSort("price")}
+                      alignRight
+                    />
                   </th>
                   <th className="px-4 py-3 w-32">Status</th>
                 </tr>
@@ -624,12 +633,10 @@ function OnboardingScreen() {
       <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
         <Sparkles className="h-7 w-7" />
       </div>
-      <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-        Witaj w BillboardHub
-      </h1>
+      <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Witaj w BillboardHub</h1>
       <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
-        Twój portfel jest pusty. Zacznij od zaimportowania danych z Excela —
-        AI rozpozna kolumny i zmapuje je w 90 sekund.
+        Twój portfel jest pusty. Zacznij od zaimportowania danych z Excela — AI rozpozna kolumny i
+        zmapuje je w 90 sekund.
       </p>
 
       <div className="mt-10 flex w-full max-w-sm flex-col items-stretch gap-3">
@@ -687,9 +694,7 @@ function AlertCard({
           <AlertTriangle className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <div className="text-3xl font-semibold tabular-nums leading-none">
-            {count}
-          </div>
+          <div className="text-3xl font-semibold tabular-nums leading-none">{count}</div>
           <div className="mt-1 text-xs text-muted-foreground">{label}</div>
         </div>
       </CardContent>

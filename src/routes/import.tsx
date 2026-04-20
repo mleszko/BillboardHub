@@ -24,8 +24,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { requireSessionForAppRoute } from "@/lib/require-session";
+import { getBackendAuthHeaders } from "@/lib/backend-auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Route = createFileRoute("/import")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Smart Excel Importer — BillboardHub" },
@@ -88,12 +92,13 @@ type ImportExecuteResponse = {
   imported_rows: number;
 };
 
-const DEV_USER_ID = "demo-user-1";
-const DEV_USER_EMAIL = "demo@billboardhub.local";
-const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") || "http://localhost:8000";
+const API_BASE_URL =
+  (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
+  "http://localhost:8000";
 
 function ImportPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stage, setStage] = useState<Stage>("upload");
   const [proposal, setProposal] = useState<MappingProposalResponse | null>(null);
   const [mapping, setMapping] = useState<MappingRow[]>([]);
@@ -116,10 +121,7 @@ function ImportPage() {
       formData.append("file", file);
       const response = await fetch(`${API_BASE_URL}/imports/guess-mapping`, {
         method: "POST",
-        headers: {
-          "x-dev-user-id": DEV_USER_ID,
-          "x-dev-user-email": DEV_USER_EMAIL,
-        },
+        headers: await getBackendAuthHeaders(),
         body: formData,
       });
       if (!response.ok) {
@@ -144,9 +146,7 @@ function ImportPage() {
   const updateMapping = (i: number, value: string) => {
     setMapping((rows) =>
       rows.map((row, idx) =>
-        idx === i
-          ? { ...row, target_field_name: value === "ignore" ? null : value }
-          : row,
+        idx === i ? { ...row, target_field_name: value === "ignore" ? null : value } : row,
       ),
     );
   };
@@ -160,12 +160,11 @@ function ImportPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-dev-user-id": DEV_USER_ID,
-          "x-dev-user-email": DEV_USER_EMAIL,
+          ...(await getBackendAuthHeaders()),
         },
         body: JSON.stringify({
           session_id: proposal.session_id,
-          owner_user_id: proposal.owner_user_id,
+          owner_user_id: user?.id ?? proposal.owner_user_id,
           mapping: mapping.map((item) => ({
             source_column_name: item.source_column_name,
             target_field_name: item.target_field_name,
@@ -216,15 +215,16 @@ function ImportPage() {
               { k: "done", label: "Import" },
             ].map((step, i) => {
               const stages: Stage[] = ["upload", "mapping", "preview", "done"];
-              const currentIdx =
-                stage === "analyzing" ? 1 : stages.indexOf(stage as Stage);
+              const currentIdx = stage === "analyzing" ? 1 : stages.indexOf(stage as Stage);
               const active = i <= currentIdx;
               return (
                 <div key={step.k} className="flex flex-1 items-center gap-2">
                   <div
                     className={cn(
                       "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                      active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     {i + 1}
@@ -258,14 +258,16 @@ function ImportPage() {
               <div>
                 <h3 className="text-lg font-semibold">Wgraj plik Excel z portfelem</h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                  AI rozpozna Twoje kolumny — np. <strong>"Koniec"</strong> → <strong>Expiry</strong>,{" "}
-                  <strong>"Najemca"</strong> → <strong>Klient</strong>. Akceptujemy XLSX, XLS, CSV.
+                  AI rozpozna Twoje kolumny — np. <strong>"Koniec"</strong> →{" "}
+                  <strong>Expiry</strong>, <strong>"Najemca"</strong> → <strong>Klient</strong>.
+                  Akceptujemy XLSX, XLS, CSV.
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2 sm:flex-row">
                 <Button asChild size="lg" className="gap-2" disabled={isBusy}>
                   <label>
-                    <FileSpreadsheet className="h-4 w-4" /> {isBusy ? "Przetwarzanie..." : "Wybierz plik"}
+                    <FileSpreadsheet className="h-4 w-4" />{" "}
+                    {isBusy ? "Przetwarzanie..." : "Wybierz plik"}
                     <input
                       type="file"
                       accept=".csv,.xlsx,.xls"
@@ -277,7 +279,13 @@ function ImportPage() {
                     />
                   </label>
                 </Button>
-                <Button size="lg" variant="outline" className="gap-2" asChild onClick={(e) => e.stopPropagation()}>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2"
+                  asChild
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <a
                     href="data:text/csv;charset=utf-8,Kod,Miasto,Adres,Klient,Cena_mies_PLN,Data_poczatku,Data_wygasniecia,Typ,Rozmiar%0ABIA-001,Bia%C5%82ystok,al.%20Jana%20Paw%C5%82a%20II%2057,Biedronka,8400,2024-09-01,2026-09-01,LED,12x4%20m"
                     download="billboardhub_szablon.csv"
@@ -340,7 +348,10 @@ function ImportPage() {
                 </div>
                 <div className="divide-y">
                   {mapping.map((c, i) => (
-                    <div key={c.source_column_name} className="grid grid-cols-12 items-center gap-2 px-3 py-2.5">
+                    <div
+                      key={c.source_column_name}
+                      className="grid grid-cols-12 items-center gap-2 px-3 py-2.5"
+                    >
                       <div className="col-span-4 min-w-0">
                         <div className="truncate text-sm font-medium">{c.source_column_name}</div>
                       </div>
@@ -374,8 +385,8 @@ function ImportPage() {
                             c.guessed_confidence >= 0.95
                               ? "text-success"
                               : c.guessed_confidence >= 0.8
-                              ? "text-warning-foreground"
-                              : "text-muted-foreground",
+                                ? "text-warning-foreground"
+                                : "text-muted-foreground",
                           )}
                         >
                           {Math.round(c.guessed_confidence * 100)}%
@@ -390,7 +401,11 @@ function ImportPage() {
                 <Button variant="ghost" onClick={reset}>
                   Anuluj
                 </Button>
-                <Button className="gap-2" disabled={requiredTargetsMissing || isBusy} onClick={() => setStage("preview")}>
+                <Button
+                  className="gap-2"
+                  disabled={requiredTargetsMissing || isBusy}
+                  onClick={() => setStage("preview")}
+                >
                   Podgląd importu <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -431,10 +446,14 @@ function ImportPage() {
                   <tbody className="divide-y">
                     {mapping.slice(0, 8).map((row) => (
                       <tr key={row.source_column_name}>
-                        <td className="px-3 py-2 font-mono text-[11px] font-semibold">{row.source_column_name}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] font-semibold">
+                          {row.source_column_name}
+                        </td>
                         <td className="px-3 py-2">{row.target_field_name || "—"}</td>
                         <td className="px-3 py-2">{proposal?.guessed_by_model || "—"}</td>
-                        <td className="px-3 py-2 tabular-nums">{Math.round(row.guessed_confidence * 100)}%</td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {Math.round(row.guessed_confidence * 100)}%
+                        </td>
                         <td className="px-3 py-2 tabular-nums">{row.transform_hint || "—"}</td>
                         <td className="px-3 py-2">
                           {row.target_field_name ? (
@@ -517,4 +536,3 @@ function Step({ text, done, loading }: { text: string; done?: boolean; loading?:
     </div>
   );
 }
-

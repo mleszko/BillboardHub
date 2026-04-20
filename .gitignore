@@ -31,6 +31,7 @@ backend/.venv
 backend/__pycache__
 backend/**/*.pyc
 backend/billboardhub.db
+billboardhub.db
 
 # Wrangler / Cloudflare
 .wrangler/

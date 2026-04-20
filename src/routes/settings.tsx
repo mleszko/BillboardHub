@@ -6,12 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { requireSessionForAppRoute } from "@/lib/require-session";
 
 export const Route = createFileRoute("/settings")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Settings — BillboardHub" },
-      { name: "description", content: "Manage organization profile, notifications, and integrations." },
+      {
+        name: "description",
+        content: "Manage organization profile, notifications, and integrations.",
+      },
     ],
   }),
   component: SettingsPage,
@@ -40,13 +45,32 @@ function SettingsPage() {
             <CardTitle className="text-base">Powiadomienia</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 rounded-lg bg-muted/20 p-4 opacity-80">
-            <Toggle label="Alert: umowa wygasa < 30 dni" desc="Powiadomienie e-mail i push" defaultChecked disabled />
+            <Toggle
+              label="Alert: umowa wygasa < 30 dni"
+              desc="Powiadomienie e-mail i push"
+              defaultChecked
+              disabled
+            />
             <Separator />
-            <Toggle label="Płatność otrzymana" desc="Powiadomienie po zaksięgowaniu wpłaty" defaultChecked disabled />
+            <Toggle
+              label="Płatność otrzymana"
+              desc="Powiadomienie po zaksięgowaniu wpłaty"
+              defaultChecked
+              disabled
+            />
             <Separator />
-            <Toggle label="Tygodniowy raport CEO" desc="Każdy poniedziałek o 8:00" defaultChecked disabled />
+            <Toggle
+              label="Tygodniowy raport CEO"
+              desc="Każdy poniedziałek o 8:00"
+              defaultChecked
+              disabled
+            />
             <Separator />
-            <Toggle label="Nowa umowa z AI Intake" desc="Powiadom mnie po każdej ekstrakcji" disabled />
+            <Toggle
+              label="Nowa umowa z AI Intake"
+              desc="Powiadom mnie po każdej ekstrakcji"
+              disabled
+            />
           </CardContent>
         </Card>
 
