@@ -23,6 +23,9 @@ import {
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { appendImported } from "@/lib/data-store";
+import { Link, useNavigate } from "@tanstack/react-router";
+import type { Billboard } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/import")({
   head: () => ({
