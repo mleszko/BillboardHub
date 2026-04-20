@@ -351,6 +351,7 @@ function ImportPage() {
                 <Button
                   className="gap-2"
                   onClick={() => {
+                    appendImported(buildImportedRows());
                     toast.success("Zaimportowano 47 nośników do portfela");
                     setStage("done");
                   }}
@@ -374,9 +375,16 @@ function ImportPage() {
                   47 nowych nośników jest już w Twoim rejestrze.
                 </p>
               </div>
-              <Button onClick={reset} variant="outline">
-                Zaimportuj kolejny plik
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button asChild className="gap-2">
+                  <Link to="/app">
+                    Otwórz dashboard <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button onClick={reset} variant="outline">
+                  Zaimportuj kolejny plik
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
