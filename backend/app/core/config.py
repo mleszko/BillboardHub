@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
@@ -33,6 +34,9 @@ class Settings(BaseSettings):
 
     # Supabase Auth JWT secret (optional in local dev).
     supabase_jwt_secret: str = ""
+
+    # Import: when false, column mapping uses only local heuristics (no LLM / no row samples sent externally).
+    import_use_llm: bool = Field(default=True, validation_alias="IMPORT_USE_LLM")
 
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ENV_FILE),

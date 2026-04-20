@@ -45,7 +45,12 @@ export function estimatedPeriodValue(
   startIso: string | null | undefined,
   endIso: string,
   storedTotal: number | null | undefined,
+  expiryEndUnknown?: boolean,
 ): number {
+  if (expiryEndUnknown) {
+    if (storedTotal != null && storedTotal > 0) return storedTotal;
+    return 0;
+  }
   if (storedTotal != null && storedTotal > 0) return storedTotal;
   const n = billingMonthsCount(startIso, endIso);
   return n * monthly;

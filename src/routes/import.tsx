@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BetaBadge } from "@/components/BetaBadge";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -11,6 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   FileSpreadsheet,
@@ -21,9 +24,10 @@ import {
   Wand2,
   AlertTriangle,
   Download,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,7 +47,7 @@ export const Route = createFileRoute("/import")({
   component: ImportPage,
 });
 
-type Stage = "upload" | "analyzing" | "mapping" | "preview" | "done";
+type Stage = "upload" | "configure" | "analyzing" | "mapping" | "preview" | "done";
 
 const TARGET_FIELDS = [
   "contract_number",
@@ -77,6 +81,24 @@ type MappingRow = {
   transform_hint: string | null;
 };
 
+type InspectSheet = {
+  name: string;
+  row_count: number;
+  column_count: number;
+};
+
+type ImportTemplate = {
+  id: string;
+  label: string;
+  description: string;
+  options: {
+    header_row_1based?: number;
+    skip_rows_before_header?: number;
+    unpivot_month_columns?: boolean;
+    monthly_aggregate?: string;
+  };
+};
+
 type MappingProposalResponse = {
   session_id: string;
   file_name: string;
@@ -86,6 +108,7 @@ type MappingProposalResponse = {
   mapping_suggestions: MappingRow[];
   guessed_by_model: string;
   warning: string | null;
+  parse_options?: Record<string, unknown> | null;
 };
 
 type ImportExecuteResponse = {
@@ -104,6 +127,7 @@ const API_BASE_URL =
 function ImportPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const fileRef = useRef<File | null>(null);
   const [stage, setStage] = useState<Stage>("upload");
   const [proposal, setProposal] = useState<MappingProposalResponse | null>(null);
   const [mapping, setMapping] = useState<MappingRow[]>([]);
@@ -111,12 +135,83 @@ function ImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
+  const [inspectSheets, setInspectSheets] = useState<InspectSheet[]>([]);
+  const [inspectFileName, setInspectFileName] = useState("");
+  const [templates, setTemplates] = useState<ImportTemplate[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState("");
+  /** 0 = wykrywanie automatyczne (zalecane). */
+  const [headerRow1Based, setHeaderRow1Based] = useState("0");
+  const [skipRowsBefore, setSkipRowsBefore] = useState("0");
+  const [showAdvancedParse, setShowAdvancedParse] = useState(false);
+  const [unpivotMonths, setUnpivotMonths] = useState(false);
+  const [monthlyAggregate, setMonthlyAggregate] = useState("mean");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch(`${API_BASE_URL}/imports/templates`, {
+          headers: await getBackendAuthHeaders(),
+        });
+        if (r.ok) {
+          const data = (await r.json()) as ImportTemplate[];
+          setTemplates(data);
+        }
+      } catch {
+        /* optional */
+      }
+    })();
+  }, []);
+
   const requiredTargetsMissing = useMemo(() => {
     const selected = new Set(mapping.map((item) => item.target_field_name).filter(Boolean));
-    return !selected.has("advertiser_name") || !selected.has("expiry_date");
+    const hasParty =
+      selected.has("advertiser_name") || selected.has("property_owner_name");
+    return !hasParty;
   }, [mapping]);
 
-  const uploadFile = async (file: File) => {
+  const applyTemplate = (id: string) => {
+    const t = templates.find((x) => x.id === id);
+    if (!t?.options) return;
+    if (t.options.header_row_1based != null)
+      setHeaderRow1Based(String(t.options.header_row_1based));
+    if (t.options.skip_rows_before_header != null)
+      setSkipRowsBefore(String(t.options.skip_rows_before_header));
+    if (t.options.unpivot_month_columns != null) setUnpivotMonths(t.options.unpivot_month_columns);
+    if (t.options.monthly_aggregate) setMonthlyAggregate(t.options.monthly_aggregate);
+  };
+
+  const inspectFile = async (file: File) => {
+    setError(null);
+    setIsBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${API_BASE_URL}/imports/inspect`, {
+        method: "POST",
+        headers: await getBackendAuthHeaders(),
+        body: formData,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się odczytać struktury pliku.");
+      }
+      const data = (await response.json()) as { file_name: string; sheets: InspectSheet[] };
+      setInspectFileName(data.file_name);
+      setInspectSheets(data.sheets);
+      const first = data.sheets[0]?.name ?? "";
+      setSelectedSheet(first);
+      setStage("configure");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Błąd podglądu pliku.");
+      fileRef.current = null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const runGuessMapping = async () => {
+    const file = fileRef.current;
+    if (!file) return;
     setError(null);
     setResult(null);
     setIsBusy(true);
@@ -124,6 +219,16 @@ function ImportPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("sheet_name", selectedSheet);
+      const hdr = parseInt(headerRow1Based, 10);
+      formData.append("header_row_1based", String(Number.isFinite(hdr) ? hdr : 0));
+      formData.append(
+        "skip_rows_before_header",
+        String(Math.max(0, parseInt(skipRowsBefore, 10) || 0)),
+      );
+      formData.append("unpivot_month_columns", unpivotMonths ? "true" : "false");
+      formData.append("monthly_aggregate", monthlyAggregate);
+
       const response = await fetch(`${API_BASE_URL}/imports/guess-mapping`, {
         method: "POST",
         headers: await getBackendAuthHeaders(),
@@ -140,9 +245,12 @@ function ImportPage() {
       if (data.warning) {
         toast.warning(data.warning);
       }
+      if (data.parse_options?.unpivot_applied) {
+        toast.message("Złączono kolumny miesięczne w jeden wiersz na umowę.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload nie powiódł się.");
-      setStage("upload");
+      setStage("configure");
     } finally {
       setIsBusy(false);
     }
@@ -195,35 +303,46 @@ function ImportPage() {
   };
 
   const reset = () => {
+    fileRef.current = null;
     setStage("upload");
     setProposal(null);
     setMapping([]);
     setResult(null);
     setError(null);
     setIsBusy(false);
+    setInspectSheets([]);
+    setInspectFileName("");
+    setSelectedSheet("");
+    setHeaderRow1Based("1");
+    setSkipRowsBefore("0");
+    setUnpivotMonths(false);
+    setMonthlyAggregate("mean");
   };
+
+  const isCsv = inspectFileName.toLowerCase().endsWith(".csv");
 
   return (
     <AppShell
       title="Smart Excel Importer"
-      subtitle="AI zmapuje Twoje kolumny do pól systemowych"
+      subtitle="Wybór arkusza, nagłówka i opcjonalnie złączenie kolumn miesięcznych"
       actions={<BetaBadge showIcon />}
     >
       <div className="mx-auto max-w-4xl space-y-5 p-3 md:p-6">
-        {/* Steps */}
         <Card>
-          <CardContent className="flex items-center justify-between p-4">
+          <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
             {[
-              { k: "upload", label: "Upload" },
-              { k: "mapping", label: "AI Mapping" },
+              { k: "upload", label: "Plik" },
+              { k: "configure", label: "Arkusz" },
+              { k: "mapping", label: "Mapowanie" },
               { k: "preview", label: "Podgląd" },
-              { k: "done", label: "Import" },
             ].map((step, i) => {
-              const stages: Stage[] = ["upload", "mapping", "preview", "done"];
-              const currentIdx = stage === "analyzing" ? 1 : stages.indexOf(stage as Stage);
-              const active = i <= currentIdx;
+              const order: Stage[] = ["upload", "configure", "mapping", "preview"];
+              let idx = order.indexOf(stage as Stage);
+              if (stage === "analyzing") idx = 2;
+              if (stage === "done") idx = 3;
+              const active = i <= idx;
               return (
-                <div key={step.k} className="flex flex-1 items-center gap-2">
+                <div key={step.k} className="flex min-w-[4.5rem] flex-1 items-center gap-2">
                   <div
                     className={cn(
                       "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
@@ -243,7 +362,7 @@ function ImportPage() {
                     {step.label}
                   </span>
                   {i < 3 && (
-                    <div className={cn("mx-2 h-px flex-1", active ? "bg-primary" : "bg-border")} />
+                    <div className={cn("mx-1 h-px flex-1", active ? "bg-primary" : "bg-border")} />
                   )}
                 </div>
               );
@@ -263,9 +382,9 @@ function ImportPage() {
               <div>
                 <h3 className="text-lg font-semibold">Wgraj plik Excel z portfelem</h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                  AI rozpozna Twoje kolumny — np. <strong>"Koniec"</strong> →{" "}
-                  <strong>Expiry</strong>, <strong>"Najemca"</strong> → <strong>Klient</strong>.
-                  Akceptujemy XLSX, XLS, CSV.
+                  Najpierw wykryjemy arkusze i rozmiar tabeli.{" "}
+                  <strong>Wiersz nagłówka</strong> wybierany jest automatycznie; możesz doprecyzować
+                  ustawienia zaawansowane lub <strong>złączyć kolumny miesięczne</strong>.
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2 sm:flex-row">
@@ -279,7 +398,10 @@ function ImportPage() {
                       className="hidden"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (file) void uploadFile(file);
+                        if (file) {
+                          fileRef.current = file;
+                          void inspectFile(file);
+                        }
                       }}
                     />
                   </label>
@@ -303,6 +425,136 @@ function ImportPage() {
           </Card>
         )}
 
+        {stage === "configure" && (
+          <Card>
+            <CardContent className="space-y-5 p-5 md:p-6">
+              <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/5 p-3">
+                <Settings2 className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+                <div className="flex-1 text-sm">
+                  <div className="font-medium">Konfiguracja odczytu: {inspectFileName}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Domyślnie system sam wykrywa wiersz z nazwami kolumn. Jeśli arkusz ma nietypową
+                    strukturę, rozwiń <strong>Ustawienia zaawansowane</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {templates.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs">Szablon startowy</Label>
+                  <Select
+                    onValueChange={(id) => {
+                      applyTemplate(id);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Wczytaj ustawienia z szablonu…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {!isCsv && inspectSheets.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Arkusz</Label>
+                  <Select value={selectedSheet} onValueChange={setSelectedSheet}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inspectSheets.map((s) => (
+                        <SelectItem key={s.name} value={s.name}>
+                          {s.name} (~{s.row_count}×{s.column_count})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2">
+                <Label htmlFor="adv-parse" className="text-sm font-normal">
+                  Ustawienia zaawansowane (ręczny wiersz nagłówka / pomijanie wierszy)
+                </Label>
+                <Switch
+                  id="adv-parse"
+                  checked={showAdvancedParse}
+                  onCheckedChange={setShowAdvancedParse}
+                />
+              </div>
+              {showAdvancedParse && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="hdr">Wiersz nagłówka (0 = automatycznie)</Label>
+                    <Input
+                      id="hdr"
+                      type="number"
+                      min={0}
+                      value={headerRow1Based}
+                      onChange={(e) => setHeaderRow1Based(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="skip">Pomiń wiersze przed nagłówkiem</Label>
+                    <Input
+                      id="skip"
+                      type="number"
+                      min={0}
+                      value={skipRowsBefore}
+                      onChange={(e) => setSkipRowsBefore(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Złącz szerokie kolumny miesięczne</div>
+                  <p className="text-xs text-muted-foreground">
+                    Jeśli styczeń–grudzień (itp.) są osobnymi kolumnami kwot, utworzymy jeden wiersz
+                    na umowę z czynszem i sumą okresu.
+                  </p>
+                </div>
+                <Switch checked={unpivotMonths} onCheckedChange={setUnpivotMonths} />
+              </div>
+
+              {unpivotMonths && (
+                <div className="space-y-2">
+                  <Label>Sposób wyliczenia czynszu miesięcznego</Label>
+                  <Select value={monthlyAggregate} onValueChange={setMonthlyAggregate}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mean">Średnia z miesięcy z kwotą</SelectItem>
+                      <SelectItem value="last">Ostatni miesiąc z kwotą</SelectItem>
+                      <SelectItem value="sum_as_monthly">
+                        Suma miesięcy ÷ liczba miesięcy
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+                <Button variant="ghost" onClick={reset}>
+                  Anuluj
+                </Button>
+                <Button className="gap-2" disabled={isBusy} onClick={() => void runGuessMapping()}>
+                  Dalej: mapowanie kolumn <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {stage === "analyzing" && (
           <Card>
             <CardContent className="flex flex-col items-center gap-4 p-12 text-center">
@@ -313,14 +565,14 @@ function ImportPage() {
                 </div>
               </div>
               <div>
-                <h3 className="text-lg font-semibold">AI analizuje arkusz…</h3>
+                <h3 className="text-lg font-semibold">Analiza i mapowanie kolumn…</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Czytam nagłówki, próbki danych i zgaduję mapowanie kolumn.
+                  Odczyt tabeli wg wybranych ustawień, potem heurystyka lub model (jeśli włączony).
                 </p>
               </div>
               <div className="w-full max-w-xs space-y-2 text-left text-xs">
-                <Step text="Parsowanie pliku XLSX" done />
-                <Step text="Detekcja nagłówków" done />
+                <Step text="Parsowanie pliku" done />
+                <Step text="Normalizacja (opcjonalnie miesiące)" done />
                 <Step text="Mapowanie kolumn → pola systemu" loading />
               </div>
             </CardContent>
@@ -335,10 +587,12 @@ function ImportPage() {
                 <div className="flex-1 text-sm">
                   <div className="font-medium">
                     Wykryto {mapping.length} kolumn w pliku{" "}
-                    <span className="font-mono text-xs">{proposal?.file_name}</span>
+                    <span className="font-mono text-xs">{proposal?.file_name}</span> ·{" "}
+                    {proposal?.total_rows ?? 0} wierszy
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    Sprawdź mapowanie. Możesz zmienić każde pole ręcznie.
+                    Sprawdź mapowanie. Przy <code>IMPORT_USE_LLM=false</code> używane są tylko
+                    lokalne heurystyki — wtedy zwykle więcej poprawek ręcznych.
                   </div>
                 </div>
                 <BetaBadge />
@@ -347,9 +601,9 @@ function ImportPage() {
               <div className="overflow-hidden rounded-lg border">
                 <div className="grid grid-cols-12 gap-2 bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <div className="col-span-4">Kolumna Excel</div>
-                  <div className="col-span-3">Próbka</div>
+                  <div className="col-span-3">Conf.</div>
                   <div className="col-span-4">Pole systemu</div>
-                  <div className="col-span-1 text-right">Conf.</div>
+                  <div className="col-span-1 text-right">%</div>
                 </div>
                 <div className="divide-y">
                   {mapping.map((c, i) => (
@@ -360,10 +614,8 @@ function ImportPage() {
                       <div className="col-span-4 min-w-0">
                         <div className="truncate text-sm font-medium">{c.source_column_name}</div>
                       </div>
-                      <div className="col-span-3 min-w-0">
-                        <div className="truncate font-mono text-xs text-muted-foreground">
-                          {c.transform_hint || "—"}
-                        </div>
+                      <div className="col-span-3 min-w-0 truncate font-mono text-xs text-muted-foreground">
+                        {c.transform_hint || "—"}
                       </div>
                       <div className="col-span-4 flex items-center gap-1.5">
                         <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -403,8 +655,8 @@ function ImportPage() {
               </div>
 
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-                <Button variant="ghost" onClick={reset}>
-                  Anuluj
+                <Button variant="ghost" onClick={() => setStage("configure")}>
+                  Wróć do ustawień arkusza
                 </Button>
                 <Button
                   className="gap-2"
@@ -416,7 +668,9 @@ function ImportPage() {
               </div>
               {requiredTargetsMissing && (
                 <p className="text-xs text-destructive">
-                  Wymagane mapowanie pól: <code>advertiser_name</code> i <code>expiry_date</code>.
+                  Wymagane mapowanie: <code>advertiser_name</code> lub{" "}
+                  <code>property_owner_name</code> (np. kolumna „wynajmujący”). Data wygaśnięcia —
+                  domyślnie koniec roku z nazwy pliku, jeśli brak kolumny z datą.
                 </p>
               )}
             </CardContent>
@@ -440,16 +694,15 @@ function ImportPage() {
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-2">Kod</th>
-                      <th className="px-3 py-2">Miasto</th>
-                      <th className="px-3 py-2">Klient</th>
-                      <th className="px-3 py-2">Cena/mc</th>
-                      <th className="px-3 py-2">Expiry</th>
+                      <th className="px-3 py-2">Kolumna</th>
+                      <th className="px-3 py-2">Pole</th>
+                      <th className="px-3 py-2">Model</th>
+                      <th className="px-3 py-2">Conf.</th>
                       <th className="px-3 py-2"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {mapping.slice(0, 8).map((row) => (
+                    {mapping.slice(0, 12).map((row) => (
                       <tr key={row.source_column_name}>
                         <td className="px-3 py-2 font-mono text-[11px] font-semibold">
                           {row.source_column_name}
@@ -459,7 +712,6 @@ function ImportPage() {
                         <td className="px-3 py-2 tabular-nums">
                           {Math.round(row.guessed_confidence * 100)}%
                         </td>
-                        <td className="px-3 py-2 tabular-nums">{row.transform_hint || "—"}</td>
                         <td className="px-3 py-2">
                           {row.target_field_name ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-success" />

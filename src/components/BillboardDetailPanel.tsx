@@ -100,7 +100,11 @@ export function BillboardDetailPanel({ billboard, open, onOpenChange }: Props) {
               <Stat icon={Calendar} label="Cena / mies." value={formatPLN(billboard.monthlyPrice)} />
             </div>
 
-            {billboard.contractEnd && (
+            {billboard.expiryUnknown ? (
+              <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
+                Brak daty wygaśnięcia w pliku źródłowym — uzupełnij w imporcie lub edycji rekordu.
+              </div>
+            ) : billboard.contractEnd ? (
               <div className="rounded-lg border bg-card p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -119,7 +123,7 @@ export function BillboardDetailPanel({ billboard, open, onOpenChange }: Props) {
                   <span>{format(new Date(billboard.contractEnd), "dd.MM.yyyy")}</span>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* AI Visibility Audit — BETA */}
             <div className="rounded-lg border bg-card p-4">

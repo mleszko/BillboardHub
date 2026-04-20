@@ -1,0 +1,17 @@
+---
+description: Core Python conventions for BillboardHub backend (venv, env, structure)
+alwaysApply: true
+---
+
+# Python project core (BillboardHub)
+
+- Backend lives in `backend/`. Prefer `backend/.venv/bin/python` and `backend/.venv/bin/pip` (or `pyproject`/`requirements.txt` as pinned in repo).
+- Small composable modules; avoid dumping logic into `main.py` except app wiring.
+- Never commit secrets. Root `.env` / `backend/.env` stay local; extend `backend/.env.example` with placeholders only.
+- Configuration via env (12-factor). Read through `app.core.config.Settings` / `get_settings()` — not scattered `os.getenv` in business logic.
+- Adding deps: pin in `backend/requirements.txt` (or project-standard file).
+
+## Errors
+
+- Fail loudly on misconfiguration (missing DB URL, invalid provider name).
+- Raise meaningful exceptions; do not blanket `except Exception: pass`.

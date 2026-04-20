@@ -17,6 +17,8 @@ export interface Billboard {
   clientLogo?: string;
   contractStart?: string; // ISO
   contractEnd?: string; // ISO
+  /** True when backend stored a placeholder end date (no real expiry in import). */
+  expiryUnknown?: boolean;
   creativePhoto: string; // URL
   dailyImpressions: number;
 }
@@ -311,7 +313,7 @@ export function statusFromContract(b: Billboard): ContractStatus {
 }
 
 export function daysRemaining(b: Billboard): number | null {
-  if (!b.contractEnd) return null;
+  if (b.expiryUnknown || !b.contractEnd) return null;
   return Math.ceil(
     (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
   );

@@ -33,13 +33,22 @@ function writeImported(rows: Billboard[]) {
 /** Snapshot for non-React callers. SSR-safe (returns []). */
 export function getBillboards(): Billboard[] {
   if (typeof window === "undefined") return [];
-  if (isDemoMode()) return MOCK_BILLBOARDS;
+  if (isDemoMode()) return [...MOCK_BILLBOARDS, ...readImported()];
   return readImported();
 }
 
 export function appendImported(rows: Billboard[]) {
   const current = readImported();
   writeImported([...current, ...rows]);
+}
+
+export function updateImported(id: string, row: Billboard) {
+  const current = readImported();
+  const idx = current.findIndex((b) => b.id === id);
+  if (idx === -1) return;
+  const next = [...current];
+  next[idx] = row;
+  writeImported(next);
 }
 
 export function clearImported() {

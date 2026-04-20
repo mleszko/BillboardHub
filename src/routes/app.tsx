@@ -1,5 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import {
+  ContractFormDialog,
+  apiContractToFormValues,
+  billboardToFormValues,
+  type ContractFormValues,
+} from "@/components/ContractFormDialog";
 import { AppShell } from "@/components/AppShell";
 import { HubertWelcomePanel } from "@/components/HubertWelcomePanel";
 import { StatsHeader } from "@/components/StatsHeader";
@@ -27,11 +33,12 @@ import {
   Download,
   Sparkles,
   ArrowRight,
+  Pencil,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode } from "@/lib/demo";
-import { useBillboards } from "@/lib/data-store";
+import { getBillboards, useBillboards } from "@/lib/data-store";
 import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
 
@@ -60,10 +67,14 @@ type ContractItem = {
   id: string;
   contract_number: string | null;
   billboard_code: string | null;
+  billboard_type: string | null;
   advertiser_name: string;
   city: string | null;
   location_address: string | null;
+  surface_size?: string | null;
+  start_date?: string | null;
   expiry_date: string;
+  expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
 };
@@ -79,6 +90,7 @@ type DashboardRow = {
   reference: string | null;
   locationAddress: string | null;
   expiryDate: string;
+  expiryUnknown: boolean;
   monthlyRentNet: number;
   badgeStatus: "active" | "expiring_soon" | "critical" | "vacant";
 };
@@ -108,9 +120,11 @@ function daysRemainingFromIso(isoDate: string): number {
 function toStatusBadge(
   contractStatus: string,
   expiryDate: string,
+  expiryUnknown?: boolean,
 ): "active" | "expiring_soon" | "critical" | "vacant" {
   if (contractStatus === "expired") return "critical";
   if (contractStatus === "terminated") return "vacant";
+  if (expiryUnknown) return "active";
   const days = daysRemainingFromIso(expiryDate);
   if (days <= 30) return "critical";
   if (days <= 60) return "expiring_soon";
@@ -127,6 +141,29 @@ function AppPage() {
   const [city, setCity] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("expiry");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [contractDialogMode, setContractDialogMode] = useState<"create" | "edit">("create");
+  const [contractDialogInitial, setContractDialogInitial] = useState<ContractFormValues | null>(
+    null,
+  );
+
+  const loadContractsFromApi = async () => {
+    try {
+      setLoadError(null);
+      const response = await fetch(`${API_BASE_URL}/contracts`, {
+        headers: await getBackendAuthHeaders(),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się pobrać kontraktów.");
+      }
+      const payload = (await response.json()) as ContractsResponse;
+      setAll(payload.items ?? []);
+    } catch (err) {
+      setAll([]);
+      setLoadError(err instanceof Error ? err.message : "Błąd ładowania kontraktów.");
+    }
+  };
 
   useEffect(() => {
     setDemo(isDemoMode());
@@ -150,32 +187,37 @@ function AppPage() {
       return;
     }
     let alive = true;
-    const loadContracts = async () => {
-      try {
-        setLoadError(null);
-        const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: await getBackendAuthHeaders(),
-        });
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || "Nie udało się pobrać kontraktów.");
-        }
-        const payload = (await response.json()) as ContractsResponse;
-        if (!alive) return;
-        setAll(payload.items ?? []);
-      } catch (err) {
-        if (!alive) return;
-        setAll([]);
-        setLoadError(err instanceof Error ? err.message : "Błąd ładowania kontraktów.");
-      } finally {
-        if (alive) setBackendReady(true);
-      }
-    };
-    void loadContracts();
+    void (async () => {
+      await loadContractsFromApi();
+      if (alive) setBackendReady(true);
+    })();
     return () => {
       alive = false;
     };
   }, [demo]);
+
+  const openNewContract = () => {
+    setContractDialogMode("create");
+    setContractDialogInitial(null);
+    setContractDialogOpen(true);
+  };
+
+  const openEditContract = (row: DashboardRow) => {
+    if (demo) {
+      if (!row.id.startsWith("local-")) return;
+      const b = getBillboards().find((x) => x.id === row.id);
+      if (!b) return;
+      setContractDialogMode("edit");
+      setContractDialogInitial(billboardToFormValues(b));
+      setContractDialogOpen(true);
+      return;
+    }
+    const c = all.find((x) => x.id === row.id);
+    if (!c) return;
+    setContractDialogMode("edit");
+    setContractDialogInitial(apiContractToFormValues(c));
+    setContractDialogOpen(true);
+  };
 
   const dashboardRows = useMemo<DashboardRow[]>(() => {
     if (demo) {
@@ -188,6 +230,7 @@ function AppPage() {
           reference: b.code,
           locationAddress: b.address,
           expiryDate: b.contractEnd || new Date().toISOString(),
+          expiryUnknown: Boolean(b.expiryUnknown),
           monthlyRentNet: b.monthlyPrice || 0,
           badgeStatus: b.status,
         }));
@@ -199,8 +242,9 @@ function AppPage() {
       reference: c.contract_number || c.billboard_code,
       locationAddress: c.location_address,
       expiryDate: c.expiry_date,
+      expiryUnknown: Boolean(c.expiry_unknown),
       monthlyRentNet: c.monthly_rent_net || 0,
-      badgeStatus: toStatusBadge(c.contract_status, c.expiry_date),
+      badgeStatus: toStatusBadge(c.contract_status, c.expiry_date, c.expiry_unknown),
     }));
   }, [all, demo, demoBillboards]);
 
@@ -246,7 +290,9 @@ function AppPage() {
 
   const summary = useMemo(() => {
     const total = dashboardRows.length;
-    const expiring30 = dashboardRows.filter((r) => daysRemainingFromIso(r.expiryDate) <= 30).length;
+    const expiring30 = dashboardRows.filter(
+      (r) => !r.expiryUnknown && daysRemainingFromIso(r.expiryDate) <= 30,
+    ).length;
     const monthlyRevenue = dashboardRows.reduce((sum, r) => sum + (r.monthlyRentNet || 0), 0);
     const occupancy = total > 0 ? 100 : 0;
     return { total, expiring30, monthlyRevenue, occupancy };
@@ -270,6 +316,7 @@ function AppPage() {
 
   const activityFeed = useMemo<ActivityItem[]>(() => {
     const nextExpiring = [...dashboardRows]
+      .filter((row) => !row.expiryUnknown)
       .map((row) => ({ ...row, days: daysRemainingFromIso(row.expiryDate) }))
       .filter((row) => row.days >= 0)
       .sort((a, b) => a.days - b.days)[0];
@@ -316,10 +363,12 @@ function AppPage() {
   }, [demo, demoBillboards]);
 
   const expiring30 = contracts.filter((b) => {
+    if (b.expiryUnknown) return false;
     const d = daysRemainingFromIso(b.expiryDate);
     return d <= 30;
   });
   const expiring60 = contracts.filter((b) => {
+    if (b.expiryUnknown) return false;
     const d = daysRemainingFromIso(b.expiryDate);
     return d > 30 && d <= 60;
   });
@@ -345,15 +394,16 @@ function AppPage() {
 
   if (demo) {
     return (
-      <AppShell
-        title="Dashboard"
-        subtitle="Stan portfela nośników reklamowych — Podlaskie"
-        actions={
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nowy billboard</span>
-          </Button>
-        }
-      >
+      <>
+        <AppShell
+          title="Dashboard"
+          subtitle="Stan portfela nośników reklamowych — Podlaskie"
+          actions={
+            <Button size="sm" className="gap-1.5" onClick={openNewContract}>
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nowy billboard</span>
+            </Button>
+          }
+        >
         <div className="space-y-4 p-3 md:space-y-6 md:p-6">
           <HubertWelcomePanel />
           <StatsHeader data={summary} />
@@ -423,20 +473,31 @@ function AppPage() {
             </CardContent>
           </Card>
         </div>
-      </AppShell>
+        </AppShell>
+        <ContractFormDialog
+          open={contractDialogOpen}
+          onOpenChange={setContractDialogOpen}
+          mode={contractDialogMode}
+          demo={demo}
+          apiBaseUrl={API_BASE_URL}
+          initial={contractDialogInitial}
+          onSaved={() => void loadContractsFromApi()}
+        />
+      </>
     );
   }
 
   return (
-    <AppShell
-      title="Umowy"
-      subtitle="Stabilny rdzeń — wszystkie aktywne kontrakty"
-      actions={
-        <div className="flex items-center gap-2">
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Nowy billboard</span>
-          </Button>
+    <>
+      <AppShell
+        title="Umowy"
+        subtitle="Stabilny rdzeń — wszystkie aktywne kontrakty"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="gap-1.5" onClick={openNewContract}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Nowy billboard</span>
+            </Button>
           <Button asChild size="sm" variant="outline" className="gap-1.5">
             <Link to="/import">
               <FileSpreadsheet className="h-4 w-4" />
@@ -510,7 +571,7 @@ function AppPage() {
           {/* Mobile cards */}
           <div className="space-y-2 md:hidden">
             {contracts.map((b) => {
-              const d = daysRemainingFromIso(b.expiryDate);
+              const d = b.expiryUnknown ? null : daysRemainingFromIso(b.expiryDate);
               return (
                 <Card key={b.id} className="border-0 shadow-none ring-1 ring-border">
                   <CardContent className="p-4">
@@ -525,15 +586,35 @@ function AppPage() {
                     </div>
                     <div className="mt-3 flex items-center justify-between text-sm">
                       <span className="tabular-nums">
-                        {format(new Date(b.expiryDate), "dd.MM.yyyy")}
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {d < 0 ? "wygasła" : `${d} dni`}
-                        </span>
+                        {b.expiryUnknown ? (
+                          <span className="text-muted-foreground">Brak daty wygaśnięcia</span>
+                        ) : (
+                          <>
+                            {format(new Date(b.expiryDate), "dd.MM.yyyy")}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {d != null && d < 0 ? "wygasła" : `${d} dni`}
+                            </span>
+                          </>
+                        )}
                       </span>
                       <span className="font-semibold tabular-nums">
                         {formatPLN(b.monthlyRentNet || 0)}
                       </span>
                     </div>
+                    {(!demo || b.id.startsWith("local-")) && (
+                      <div className="mt-2 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => openEditContract(b)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edytuj
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -579,11 +660,12 @@ function AppPage() {
                     />
                   </th>
                   <th className="px-4 py-3 w-32">Status</th>
+                  <th className="px-4 py-3 w-28 text-right">Akcje</th>
                 </tr>
               </thead>
               <tbody>
                 {contracts.map((b) => {
-                  const d = daysRemainingFromIso(b.expiryDate);
+                  const d = b.expiryUnknown ? null : daysRemainingFromIso(b.expiryDate);
                   return (
                     <tr
                       key={b.id}
@@ -597,23 +679,45 @@ function AppPage() {
                       </td>
                       <td className="px-4 py-3 font-medium">{b.advertiserName}</td>
                       <td className="px-4 py-3">
-                        <div className="tabular-nums">
-                          {format(new Date(b.expiryDate), "dd.MM.yyyy")}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-xs tabular-nums",
-                            d <= 30 ? "text-destructive font-semibold" : "text-muted-foreground",
-                          )}
-                        >
-                          {d < 0 ? "wygasła" : `${d} dni pozostało`}
-                        </div>
+                        {b.expiryUnknown ? (
+                          <div className="text-sm text-muted-foreground">Brak w imporcie</div>
+                        ) : (
+                          <>
+                            <div className="tabular-nums">
+                              {format(new Date(b.expiryDate), "dd.MM.yyyy")}
+                            </div>
+                            <div
+                              className={cn(
+                                "text-xs tabular-nums",
+                                d != null && d <= 30
+                                  ? "text-destructive font-semibold"
+                                  : "text-muted-foreground",
+                              )}
+                            >
+                              {d != null && d < 0 ? "wygasła" : `${d} dni pozostało`}
+                            </div>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         {formatPLN(b.monthlyRentNet || 0)}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={b.badgeStatus} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {(!demo || b.id.startsWith("local-")) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => openEditContract(b)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Edytuj</span>
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -623,7 +727,17 @@ function AppPage() {
           </div>
         </section>
       </div>
-    </AppShell>
+      </AppShell>
+      <ContractFormDialog
+        open={contractDialogOpen}
+        onOpenChange={setContractDialogOpen}
+        mode={contractDialogMode}
+        demo={demo}
+        apiBaseUrl={API_BASE_URL}
+        initial={contractDialogInitial}
+        onSaved={() => void loadContractsFromApi()}
+      />
+    </>
   );
 }
 

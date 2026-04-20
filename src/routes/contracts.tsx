@@ -1,7 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ContractFormDialog,
+  apiContractToFormValues,
+  billboardToFormValues,
+  type ContractFormValues,
+} from "@/components/ContractFormDialog";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
-import { billboards, cities, clients, formatPLN, type Billboard } from "@/lib/mock-data";
+import { formatPLN, type Billboard } from "@/lib/mock-data";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,11 +18,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Search, FileSignature, Send, Eye } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Search, FileSignature, Send, Eye, Trash2, Plus, Pencil } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { isDemoMode } from "@/lib/demo";
+import { getBillboards, useBillboards } from "@/lib/data-store";
 import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
 import {
@@ -46,6 +63,7 @@ type BackendContract = {
   id: string;
   contract_number: string | null;
   billboard_code: string | null;
+  billboard_type?: string | null;
   advertiser_name: string;
   property_owner_name?: string | null;
   city: string | null;
@@ -53,6 +71,7 @@ type BackendContract = {
   surface_size?: string | null;
   start_date: string | null;
   expiry_date: string;
+  expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
   total_contract_value_net?: number | null;
@@ -77,6 +96,7 @@ type ContractRow = {
   status: "active" | "expiring_soon" | "critical" | "vacant";
   contractStart: string | null;
   contractEnd: string;
+  expiryUnknown: boolean;
   lessor: string | null;
   contactPerson: string | null;
   contactPhone: string | null;
@@ -91,9 +111,14 @@ const API_BASE_URL =
   "http://localhost:8000";
 const GLOBAL_SEARCH_KEY = "bbhub:global-search-value";
 
-function statusFromBackend(contractStatus: string, expiryDate: string): ContractRow["status"] {
+function statusFromBackend(
+  contractStatus: string,
+  expiryDate: string,
+  expiryUnknown?: boolean,
+): ContractRow["status"] {
   if (contractStatus === "terminated") return "vacant";
   if (contractStatus === "expired") return "critical";
+  if (expiryUnknown) return "active";
   const d = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (d <= 30) return "critical";
   if (d <= 60) return "expiring_soon";
@@ -124,13 +149,19 @@ function ContractDetailDialog({
   row,
   open,
   onOpenChange,
+  canEdit,
+  onEditRequest,
 }: {
   row: ContractRow | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  canEdit?: boolean;
+  onEditRequest?: () => void;
 }) {
   if (!row) return null;
-  const months = billingMonthsCount(row.contractStart, row.contractEnd);
+  const months = row.expiryUnknown
+    ? 0
+    : billingMonthsCount(row.contractStart, row.contractEnd);
   const schedule = buildPaymentSchedule(row.contractStart, row.contractEnd, row.monthlyPrice);
   const scheduleTotal = schedule.reduce((s, m) => s + m.amount, 0);
   const usesStoredTotal = row.totalContractValue != null && row.totalContractValue > 0;
@@ -161,10 +192,23 @@ function ContractDetailDialog({
             </dd>
             <dt className="text-muted-foreground">Okres umowy</dt>
             <dd>
-              {row.contractStart
-                ? `${format(new Date(row.contractStart), "dd.MM.yyyy")} – ${format(new Date(row.contractEnd), "dd.MM.yyyy")}`
-                : `do ${format(new Date(row.contractEnd), "dd.MM.yyyy")}`}
-              <span className="text-muted-foreground"> · {formatDurationPl(months)}</span>
+              {row.expiryUnknown ? (
+                <span className="text-muted-foreground">
+                  Brak daty wygaśnięcia w pliku źródłowym — dodaj kolumnę z datą w imporcie lub uzupełnij
+                  ręcznie.
+                </span>
+              ) : row.contractStart ? (
+                <>
+                  {format(new Date(row.contractStart), "dd.MM.yyyy")} –{" "}
+                  {format(new Date(row.contractEnd), "dd.MM.yyyy")}
+                  <span className="text-muted-foreground"> · {formatDurationPl(months)}</span>
+                </>
+              ) : (
+                <>
+                  do {format(new Date(row.contractEnd), "dd.MM.yyyy")}
+                  <span className="text-muted-foreground"> · {formatDurationPl(months)}</span>
+                </>
+              )}
             </dd>
             <dt className="text-muted-foreground">Czynsz / mc</dt>
             <dd className="font-semibold tabular-nums">{formatPLN(row.monthlyPrice)}</dd>
@@ -220,6 +264,23 @@ function ContractDetailDialog({
               </>
             )}
           </div>
+
+          {canEdit && onEditRequest ? (
+            <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => {
+                  onOpenChange(false);
+                  onEditRequest();
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edytuj umowę
+              </Button>
+            </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
@@ -229,6 +290,7 @@ function ContractDetailDialog({
 function ContractsPage() {
   const [demo, setDemo] = useState(false);
   const [backendRows, setBackendRows] = useState<ContractRow[]>([]);
+  const [backendRawItems, setBackendRawItems] = useState<BackendContract[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -236,6 +298,14 @@ function ContractsPage() {
   const [client, setClient] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [detailRow, setDetailRow] = useState<ContractRow | null>(null);
+  const [deleteRow, setDeleteRow] = useState<ContractRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [contractDialogMode, setContractDialogMode] = useState<"create" | "edit">("create");
+  const [contractDialogInitial, setContractDialogInitial] = useState<ContractFormValues | null>(
+    null,
+  );
+  const { data: demoBillboardRows } = useBillboards();
 
   useEffect(() => {
     setDemo(isDemoMode());
@@ -253,71 +323,130 @@ function ContractsPage() {
     return () => window.removeEventListener("bbhub:global-search", handler as EventListener);
   }, []);
 
+  const reloadBackendRows = useCallback(async () => {
+    if (demo) return;
+    try {
+      setLoadError(null);
+      const response = await fetch(`${API_BASE_URL}/contracts`, {
+        headers: await getBackendAuthHeaders(),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się pobrać kontraktów.");
+      }
+      const payload = (await response.json()) as ContractsResponse;
+      const items = payload.items ?? [];
+      setBackendRawItems(items);
+      const monthly = (item: BackendContract) => item.monthly_rent_net || 0;
+      const mapped: ContractRow[] = items.map((item) => ({
+        id: item.id,
+        code:
+          item.contract_number ||
+          item.billboard_code ||
+          `CTR-${item.id.slice(0, 8).toUpperCase()}`,
+        client: item.advertiser_name,
+        city: item.city || "—",
+        address: item.location_address || "—",
+        size: item.surface_size?.trim() || "—",
+        monthlyPrice: monthly(item),
+        status: statusFromBackend(
+          item.contract_status,
+          item.expiry_date,
+          item.expiry_unknown,
+        ),
+        contractStart: item.start_date,
+        contractEnd: item.expiry_date,
+        expiryUnknown: Boolean(item.expiry_unknown),
+        lessor: item.property_owner_name?.trim() || null,
+        contactPerson: item.contact_person?.trim() || null,
+        contactPhone: item.contact_phone?.trim() || null,
+        contactEmail: item.contact_email?.trim() || null,
+        notes: item.notes?.trim() || null,
+        totalContractValue: item.total_contract_value_net ?? null,
+        periodEstimate: estimatedPeriodValue(
+          monthly(item),
+          item.start_date,
+          item.expiry_date,
+          item.total_contract_value_net,
+          item.expiry_unknown,
+        ),
+      }));
+      setBackendRows(mapped);
+    } catch (err) {
+      setBackendRows([]);
+      setBackendRawItems([]);
+      setLoadError(err instanceof Error ? err.message : "Błąd ładowania kontraktów.");
+    } finally {
+      setReady(true);
+    }
+  }, [demo]);
+
   useEffect(() => {
     if (demo) {
       setReady(true);
       return;
     }
-    let alive = true;
-    const load = async () => {
-      try {
-        setLoadError(null);
-        const response = await fetch(`${API_BASE_URL}/contracts`, {
-          headers: await getBackendAuthHeaders(),
-        });
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || "Nie udało się pobrać kontraktów.");
-        }
-        const payload = (await response.json()) as ContractsResponse;
-        if (!alive) return;
-        const monthly = (item: BackendContract) => item.monthly_rent_net || 0;
-        const mapped: ContractRow[] = (payload.items ?? []).map((item) => ({
-          id: item.id,
-          code:
-            item.contract_number ||
-            item.billboard_code ||
-            `CTR-${item.id.slice(0, 8).toUpperCase()}`,
-          client: item.advertiser_name,
-          city: item.city || "—",
-          address: item.location_address || "—",
-          size: item.surface_size?.trim() || "—",
-          monthlyPrice: monthly(item),
-          status: statusFromBackend(item.contract_status, item.expiry_date),
-          contractStart: item.start_date,
-          contractEnd: item.expiry_date,
-          lessor: item.property_owner_name?.trim() || null,
-          contactPerson: item.contact_person?.trim() || null,
-          contactPhone: item.contact_phone?.trim() || null,
-          contactEmail: item.contact_email?.trim() || null,
-          notes: item.notes?.trim() || null,
-          totalContractValue: item.total_contract_value_net ?? null,
-          periodEstimate: estimatedPeriodValue(
-            monthly(item),
-            item.start_date,
-            item.expiry_date,
-            item.total_contract_value_net,
-          ),
-        }));
-        setBackendRows(mapped);
-      } catch (err) {
-        if (!alive) return;
-        setBackendRows([]);
-        setLoadError(err instanceof Error ? err.message : "Błąd ładowania kontraktów.");
-      } finally {
-        if (alive) setReady(true);
+    void reloadBackendRows();
+  }, [demo, reloadBackendRows]);
+
+  const confirmDeleteContract = useCallback(async () => {
+    if (!deleteRow || demo) return;
+    setDeleteBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts/${deleteRow.id}`, {
+        method: "DELETE",
+        headers: await getBackendAuthHeaders(),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się usunąć umowy.");
       }
-    };
-    void load();
-    return () => {
-      alive = false;
-    };
-  }, [demo]);
+      toast.success("Umowa została usunięta.");
+      const removedId = deleteRow.id;
+      setDeleteRow(null);
+      setDetailRow((r) => (r?.id === removedId ? null : r));
+      await reloadBackendRows();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Błąd usuwania.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [deleteRow, demo, reloadBackendRows]);
+
+  const openNewContract = () => {
+    setContractDialogMode("create");
+    setContractDialogInitial(null);
+    setContractDialogOpen(true);
+  };
+
+  const rowIsEditable = (row: ContractRow) => !demo || row.id.startsWith("local-");
+
+  const openEditContract = (row: ContractRow) => {
+    if (!rowIsEditable(row)) {
+      toast.info("W trybie demo edycja dotyczy tylko wpisów dodanych ręcznie (Nowy billboard).");
+      return;
+    }
+    if (demo) {
+      const b = getBillboards().find((x) => x.id === row.id);
+      if (!b) return;
+      setContractDialogMode("edit");
+      setContractDialogInitial(billboardToFormValues(b));
+      setContractDialogOpen(true);
+      setDetailRow(null);
+      return;
+    }
+    const raw = backendRawItems.find((x) => x.id === row.id);
+    if (!raw) return;
+    setContractDialogMode("edit");
+    setContractDialogInitial(apiContractToFormValues(raw));
+    setContractDialogOpen(true);
+    setDetailRow(null);
+  };
 
   const sourceRows = useMemo<ContractRow[]>(
     () =>
       demo
-        ? billboards
+        ? demoBillboardRows
             .filter((b: Billboard) => Boolean(b.client && b.contractEnd))
             .map((b) => {
               const end = b.contractEnd || new Date().toISOString();
@@ -333,26 +462,33 @@ function ContractsPage() {
                 status: b.status,
                 contractStart: start,
                 contractEnd: end,
+                expiryUnknown: Boolean(b.expiryUnknown),
                 lessor: null,
                 contactPerson: null,
                 contactPhone: null,
                 contactEmail: null,
                 notes: null,
                 totalContractValue: null,
-                periodEstimate: estimatedPeriodValue(b.monthlyPrice, start, end, null),
+                periodEstimate: estimatedPeriodValue(
+                  b.monthlyPrice,
+                  start,
+                  end,
+                  null,
+                  Boolean(b.expiryUnknown),
+                ),
               };
             })
         : backendRows,
-    [demo, backendRows],
+    [demo, backendRows, demoBillboardRows],
   );
 
   const cityOptions = useMemo(
-    () => (demo ? cities : Array.from(new Set(sourceRows.map((r) => r.city))).sort()),
-    [demo, sourceRows],
+    () => Array.from(new Set(sourceRows.map((r) => r.city))).sort(),
+    [sourceRows],
   );
   const clientOptions = useMemo(
-    () => (demo ? clients : Array.from(new Set(sourceRows.map((r) => r.client))).sort()),
-    [demo, sourceRows],
+    () => Array.from(new Set(sourceRows.map((r) => r.client))).sort(),
+    [sourceRows],
   );
 
   const rows = useMemo(() => {
@@ -375,6 +511,20 @@ function ContractsPage() {
     <AppShell
       title="Contracts"
       subtitle={`${viewTotals.count} w widoku · ${sourceRows.length} łącznie w portfelu`}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" className="gap-1.5" onClick={openNewContract}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nowy billboard</span>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="gap-1.5">
+            <Link to="/import">
+              <span className="hidden sm:inline">Importuj Excel</span>
+              <span className="sm:hidden">Import</span>
+            </Link>
+          </Button>
+        </div>
+      }
     >
       <div className="space-y-4 p-3 md:p-6">
         <ContractDetailDialog
@@ -383,7 +533,50 @@ function ContractsPage() {
           onOpenChange={(o) => {
             if (!o) setDetailRow(null);
           }}
+          canEdit={detailRow != null && rowIsEditable(detailRow)}
+          onEditRequest={detailRow ? () => openEditContract(detailRow) : undefined}
         />
+
+        <ContractFormDialog
+          open={contractDialogOpen}
+          onOpenChange={setContractDialogOpen}
+          mode={contractDialogMode}
+          demo={demo}
+          apiBaseUrl={API_BASE_URL}
+          initial={contractDialogInitial}
+          onSaved={() => void reloadBackendRows()}
+        />
+
+        <AlertDialog
+          open={deleteRow != null}
+          onOpenChange={(open) => {
+            if (!open && !deleteBusy) setDeleteRow(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Usunąć umowę z portfela?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteRow ? (
+                  <>
+                    <span className="font-medium text-foreground">{deleteRow.code}</span> —{" "}
+                    {deleteRow.client}. Tej operacji nie można cofnąć.
+                  </>
+                ) : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteBusy}>Anuluj</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={deleteBusy}
+                onClick={() => void confirmDeleteContract()}
+              >
+                {deleteBusy ? "Usuwanie…" : "Usuń"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {!demo && loadError && (
           <Card className="border-destructive/30 bg-destructive/5">
@@ -477,11 +670,14 @@ function ContractsPage() {
 
         <div className="space-y-2 md:hidden">
           {rows.map((b) => {
-            const d = Math.ceil(
-              (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-            );
+            const d = b.expiryUnknown
+              ? null
+              : Math.ceil(
+                  (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                );
             const total = 365;
-            const progress = Math.max(0, Math.min(100, (d / total) * 100));
+            const progress =
+              d == null ? 0 : Math.max(0, Math.min(100, (d / total) * 100));
             return (
               <Card key={b.id}>
                 <CardContent className="space-y-3 p-4">
@@ -499,9 +695,15 @@ function ContractsPage() {
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
                       <span className="text-muted-foreground">Pozostało</span>
-                      <span className="font-semibold">{d < 0 ? "wygasła" : `${d} dni`}</span>
+                      <span className="font-semibold">
+                        {b.expiryUnknown
+                          ? "brak daty końca"
+                          : d != null && d < 0
+                            ? "wygasła"
+                            : `${d} dni`}
+                      </span>
                     </div>
-                    <Progress value={progress} className="h-1.5" />
+                    {!b.expiryUnknown ? <Progress value={progress} className="h-1.5" /> : null}
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
                     <div className="text-sm font-semibold tabular-nums">
@@ -518,6 +720,26 @@ function ContractsPage() {
                     >
                       <Eye className="h-3.5 w-3.5" /> Szczegóły
                     </Button>
+                    {rowIsEditable(b) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={() => openEditContract(b)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edytuj
+                      </Button>
+                    )}
+                    {!demo && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDeleteRow(b)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Usuń
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -543,18 +765,24 @@ function ContractsPage() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((b) => {
-                  const d = Math.ceil(
-                    (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-                  );
+                  const d = b.expiryUnknown
+                    ? null
+                    : Math.ceil(
+                        (new Date(b.contractEnd).getTime() - Date.now()) /
+                          (1000 * 60 * 60 * 24),
+                      );
                   const total = 365;
-                  const progress = Math.max(0, Math.min(100, (d / total) * 100));
+                  const progress =
+                    d == null ? 0 : Math.max(0, Math.min(100, (d / total) * 100));
                   return (
                     <tr key={b.id} className="transition-colors hover:bg-accent/40">
                       <td className="px-4 py-3 font-mono text-xs font-semibold">{b.code}</td>
                       <td className="px-4 py-3">
                         <div className="font-medium">{b.client}</div>
                         <div className="text-xs text-muted-foreground">
-                          do {format(new Date(b.contractEnd), "dd.MM.yyyy")}
+                          {b.expiryUnknown
+                            ? "brak daty końca w pliku"
+                            : `do ${format(new Date(b.contractEnd), "dd.MM.yyyy")}`}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -568,10 +796,14 @@ function ContractsPage() {
                       <td className="px-4 py-3">
                         <div className="mb-1 flex justify-between text-[11px]">
                           <span className="text-muted-foreground">
-                            {d < 0 ? "wygasła" : `${d} dni`}
+                            {b.expiryUnknown
+                              ? "—"
+                              : d != null && d < 0
+                                ? "wygasła"
+                                : `${d} dni`}
                           </span>
                         </div>
-                        <Progress value={progress} className="h-1.5" />
+                        {!b.expiryUnknown ? <Progress value={progress} className="h-1.5" /> : null}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         {formatPLN(b.monthlyPrice)}
@@ -589,6 +821,26 @@ function ContractsPage() {
                           >
                             <Eye className="h-3.5 w-3.5" /> Szczegóły
                           </Button>
+                          {rowIsEditable(b) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-1"
+                              onClick={() => openEditContract(b)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" /> Edytuj
+                            </Button>
+                          )}
+                          {!demo && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setDeleteRow(b)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

@@ -43,6 +43,24 @@ class MappingGuessesResponse(BaseModel):
     warning: str | None = None
 
 
+class ImportInspectSheet(BaseModel):
+    name: str
+    row_count: int
+    column_count: int
+
+
+class ImportInspectResponse(BaseModel):
+    file_name: str
+    sheets: list[ImportInspectSheet]
+
+
+class ImportTemplatePreset(BaseModel):
+    id: str
+    label: str
+    description: str
+    options: dict[str, object]
+
+
 class ImportMappingProposalResponse(BaseModel):
     session_id: str
     file_name: str
@@ -52,6 +70,7 @@ class ImportMappingProposalResponse(BaseModel):
     mapping_suggestions: list[MappingProposal]
     guessed_by_model: str
     warning: str | None = None
+    parse_options: dict[str, object] | None = None
 
 
 class MappingConfirmationItem(BaseModel):
@@ -92,6 +111,7 @@ class ContractsListItem(BaseModel):
     surface_size: str | None = None
     start_date: str | None = None
     expiry_date: str
+    expiry_unknown: bool = False
     contract_status: str
     monthly_rent_net: float | None
     total_contract_value_net: float | None = None
