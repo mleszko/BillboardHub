@@ -30,6 +30,9 @@ function MapPage() {
   return (
     <AppShell title="Map View" subtitle="Geolokalizacja całego portfela">
       <div className="relative h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)]">
+        <div className="absolute left-4 right-4 top-4 z-[400] md:left-6 md:right-auto md:max-w-md">
+          <DemoPreviewBadge />
+        </div>
         <BillboardMap
           billboards={billboards}
           selectedId={selected?.id}
