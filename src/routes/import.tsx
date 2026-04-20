@@ -20,6 +20,7 @@ import {
   Loader2,
   Wand2,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -162,9 +163,19 @@ function ImportPage() {
                   <strong>"Najemca"</strong> → <strong>Klient</strong>. Akceptujemy XLSX, XLS, CSV.
                 </p>
               </div>
-              <Button size="lg" className="gap-2">
-                <FileSpreadsheet className="h-4 w-4" /> Wybierz plik (demo)
-              </Button>
+              <div className="flex flex-col items-center gap-2 sm:flex-row">
+                <Button size="lg" className="gap-2">
+                  <FileSpreadsheet className="h-4 w-4" /> Wybierz plik (demo)
+                </Button>
+                <Button size="lg" variant="outline" className="gap-2" asChild onClick={(e) => e.stopPropagation()}>
+                  <a
+                    href="data:text/csv;charset=utf-8,Kod,Miasto,Adres,Klient,Cena_mies_PLN,Data_poczatku,Data_wygasniecia,Typ,Rozmiar%0ABIA-001,Bia%C5%82ystok,al.%20Jana%20Paw%C5%82a%20II%2057,Biedronka,8400,2024-09-01,2026-09-01,LED,12x4%20m"
+                    download="billboardhub_szablon.csv"
+                  >
+                    <Download className="h-4 w-4" /> Pobierz szablon
+                  </a>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

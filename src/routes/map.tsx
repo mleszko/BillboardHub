@@ -1,10 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { BillboardMap } from "@/components/BillboardMap";
 import { BillboardDetailPanel } from "@/components/BillboardDetailPanel";
 import { useState } from "react";
 import { Billboard, billboards } from "@/lib/mock-data";
 import { Card } from "@/components/ui/card";
+import { DemoPreviewBadge } from "@/components/DemoPreviewBadge";
+import { isDemoMode } from "@/lib/demo";
 
 export const Route = createFileRoute("/map")({
   head: () => ({
@@ -13,6 +15,12 @@ export const Route = createFileRoute("/map")({
       { name: "description", content: "Interactive geospatial map of all billboards with live contract status." },
     ],
   }),
+  beforeLoad: () => {
+    // Wodotryski are demo-only. Stable login users see the table at /app.
+    if (typeof window !== "undefined" && !isDemoMode()) {
+      throw redirect({ to: "/app" });
+    }
+  },
   component: MapPage,
 });
 
@@ -30,6 +38,9 @@ function MapPage() {
   return (
     <AppShell title="Map View" subtitle="Geolokalizacja całego portfela">
       <div className="relative h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)]">
+        <div className="absolute left-4 right-4 top-4 z-[400] md:left-6 md:right-auto md:max-w-md">
+          <DemoPreviewBadge />
+        </div>
         <BillboardMap
           billboards={billboards}
           selectedId={selected?.id}

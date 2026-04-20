@@ -1,8 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import {
-  LayoutDashboard,
   Map,
-  Package,
   FileText,
   Settings,
   Sparkles,
@@ -10,6 +8,7 @@ import {
   FileSpreadsheet,
   Heart,
   Rocket,
+  Bot,
 } from "lucide-react";
 import {
   Sidebar,
@@ -28,20 +27,21 @@ import { useEffect, useState } from "react";
 import { endDemo, isDemoMode } from "@/lib/demo";
 import { useNavigate } from "@tanstack/react-router";
 
-const operations = [
-  { title: "Dashboard", url: "/app", icon: LayoutDashboard },
-  { title: "Map View", url: "/map", icon: Map },
-  { title: "Inventory", url: "/inventory", icon: Package },
-  { title: "Contracts", url: "/contracts", icon: FileText },
-  { title: "Settings", url: "/settings", icon: Settings },
+// Stable post-login core. These features must work 100%.
+const CORE = [
+  { title: "Umowy", url: "/app", icon: FileText },
+  { title: "Excel Importer", url: "/import", icon: FileSpreadsheet },
+  { title: "Ustawienia", url: "/settings", icon: Settings },
 ];
 
-const labs = [
+// Demo-only "wodotryski". Hidden in standard logged-in mode.
+const DEMO_PREVIEW = [
+  { title: "Mapa nośników", url: "/map", icon: Map, beta: true },
+  { title: "Hubert AI", url: "/ai-intake", icon: Bot, beta: true },
   { title: "AI Intake", url: "/ai-intake", icon: Sparkles, beta: true },
-  { title: "Excel Importer", url: "/import", icon: FileSpreadsheet, beta: true },
 ];
 
-const resources = [
+const RESOURCES = [
   { title: "Roadmap", url: "/roadmap", icon: Rocket },
   { title: "Wsparcie", url: "/support", icon: Heart },
 ];
@@ -49,6 +49,8 @@ const resources = [
 export function AppSidebar() {
   const location = useLocation();
   const path = location.pathname;
+  const [demo, setDemo] = useState(false);
+  useEffect(() => setDemo(isDemoMode()), []);
 
   return (
     <Sidebar collapsible="icon">
@@ -62,7 +64,7 @@ export function AppSidebar() {
               BillboardHub
             </span>
             <span className="text-[11px] text-sidebar-foreground/60">
-              Podlaskie OOH
+              {demo ? "Demo · Podlaskie" : "Stable Core"}
             </span>
           </div>
         </div>
@@ -70,10 +72,10 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupLabel>Rdzeń</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {operations.map((item) => {
+              {CORE.map((item) => {
                 const active = path === item.url || path.startsWith(item.url + "/");
                 return (
                   <SidebarMenuItem key={item.title}>
@@ -90,33 +92,35 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>AI Labs</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {labs.map((item) => {
-                const active = path === item.url || path.startsWith(item.url + "/");
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
-                      <Link to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span className="flex-1">{item.title}</span>
-                        {item.beta && <BetaBadge className="ml-auto" />}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {demo && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Upcoming Preview</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {DEMO_PREVIEW.map((item) => {
+                  const active = path === item.url;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                        <Link to={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span className="flex-1">{item.title}</span>
+                          {item.beta && <BetaBadge className="ml-auto" />}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel>Zasoby</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {resources.map((item) => {
+              {RESOURCES.map((item) => {
                 const active = path === item.url || path.startsWith(item.url + "/");
                 return (
                   <SidebarMenuItem key={item.title}>
@@ -138,11 +142,15 @@ export function AppSidebar() {
         <DemoFooter />
         <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-            AK
+            {demo ? "MD" : "AK"}
           </div>
           <div className="min-w-0 flex-1 text-xs">
-            <div className="truncate font-medium text-sidebar-foreground">Anna Kowalska</div>
-            <div className="truncate text-sidebar-foreground/60">CEO · Podlaskie Estate</div>
+            <div className="truncate font-medium text-sidebar-foreground">
+              {demo ? "Mateusz (demo)" : "Anna Kowalska"}
+            </div>
+            <div className="truncate text-sidebar-foreground/60">
+              {demo ? "Demo Mode" : "CEO · Podlaskie Estate"}
+            </div>
           </div>
         </div>
       </SidebarFooter>
