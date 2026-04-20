@@ -58,6 +58,17 @@ const mapPhotos = [
   "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=800&q=70",
 ];
 
+const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
+  bialystok: { lat: 53.1325, lng: 23.1688 },
+  białystok: { lat: 53.1325, lng: 23.1688 },
+  suwalki: { lat: 54.1118, lng: 22.9309 },
+  suwałki: { lat: 54.1118, lng: 22.9309 },
+  lomza: { lat: 53.1781, lng: 22.0594 },
+  łomża: { lat: 53.1781, lng: 22.0594 },
+  augustow: { lat: 53.8445, lng: 22.9798 },
+  augustów: { lat: 53.8445, lng: 22.9798 },
+};
+
 function statusFromBackend(contractStatus: string, expiryDate: string): Billboard["status"] {
   if (contractStatus === "terminated") return "vacant";
   if (contractStatus === "expired") return "critical";
@@ -88,6 +99,24 @@ function estimateImpressions(type: Billboard["type"]): number {
   if (type === "Backlight") return 28000;
   if (type === "Citylight") return 12000;
   return 24000;
+}
+
+function hash01(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return (Math.abs(hash) % 1000) / 1000;
+}
+
+function fallbackCoords(item: BackendContract): { lat: number; lng: number } | null {
+  const rawCity = (item.city || "").trim().toLowerCase();
+  const center = CITY_CENTERS[rawCity];
+  if (!center) return null;
+  const seed = `${item.id}:${item.location_address || ""}:${item.contract_number || ""}`;
+  const jitterLat = (hash01(`${seed}:lat`) - 0.5) * 0.06;
+  const jitterLng = (hash01(`${seed}:lng`) - 0.5) * 0.1;
+  return { lat: center.lat + jitterLat, lng: center.lng + jitterLng };
 }
 
 function MapPage() {
@@ -141,9 +170,13 @@ function MapPage() {
   const mapRows = useMemo<Billboard[]>(() => {
     if (demo) return billboards;
     return backendRows
-      .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
       .map((item, idx) => {
         const type = mapBillboardType(item.billboard_type);
+        const hasExact = Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
+        const approx = !hasExact ? fallbackCoords(item) : null;
+        const lat = hasExact ? Number(item.latitude) : approx?.lat;
+        const lng = hasExact ? Number(item.longitude) : approx?.lng;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
         return {
           id: item.id,
           code:
@@ -152,8 +185,8 @@ function MapPage() {
             `CTR-${item.id.slice(0, 8).toUpperCase()}`,
           city: item.city || "—",
           address: item.location_address || "Adres z umowy",
-          lat: Number(item.latitude),
-          lng: Number(item.longitude),
+          lat,
+          lng,
           type,
           size: defaultSize(type),
           monthlyPrice: item.monthly_rent_net || 0,
@@ -164,7 +197,8 @@ function MapPage() {
           creativePhoto: mapPhotos[idx % mapPhotos.length],
           dailyImpressions: estimateImpressions(type),
         };
-      });
+      })
+      .filter((row): row is Billboard => Boolean(row));
   }, [backendRows, demo]);
 
   const criticalCount = mapRows.filter((b) => b.status === "critical").length;
