@@ -15,23 +15,16 @@ export function HubertWelcomePanel() {
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      setDismissed(window.sessionStorage.getItem("bbhub-hubert-welcome-dismissed") === "1");
-    }
   }, []);
 
   if (!mounted) return null;
-  if (!isDemoMode()) return null;
   if (dismissed) return null;
 
-  const name = demoName();
+  const name = isDemoMode() ? demoName() : "Mateusz";
   const s = stats();
 
   const dismiss = () => {
     setDismissed(true);
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("bbhub-hubert-welcome-dismissed", "1");
-    }
   };
 
   return (

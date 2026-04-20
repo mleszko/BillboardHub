@@ -3,6 +3,14 @@ import { recentActivity, formatPLN } from "@/lib/mock-data";
 import { CheckCircle2, FileSignature, AlertTriangle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type ActivityItem = {
+  id: number;
+  type: "payment" | "renewal" | "alert" | "ai";
+  text: string;
+  when: string;
+  amount?: number;
+};
+
 const iconMap = {
   payment: { icon: CheckCircle2, cls: "bg-success/15 text-success" },
   renewal: { icon: FileSignature, cls: "bg-info/15 text-info" },
@@ -10,15 +18,18 @@ const iconMap = {
   ai: { icon: Sparkles, cls: "bg-primary/10 text-primary" },
 } as const;
 
-export function RecentActivity() {
+export function RecentActivity({ items }: { items?: ActivityItem[] }) {
+  const feed = items ?? recentActivity;
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base font-semibold">Aktywność</CardTitle>
-        <p className="text-xs text-muted-foreground">Ostatnie zdarzenia w systemie</p>
+        <p className="text-xs text-muted-foreground">
+          {items ? "Wygenerowane z aktualnych danych kontraktowych" : "Ostatnie zdarzenia w systemie"}
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        {recentActivity.map((a) => {
+        {feed.map((a) => {
           const v = iconMap[a.type as keyof typeof iconMap];
           return (
             <div key={a.id} className="flex items-start gap-3">

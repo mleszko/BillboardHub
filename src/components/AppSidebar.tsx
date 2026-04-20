@@ -1,4 +1,4 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Map,
   FileText,
@@ -25,11 +25,15 @@ import {
 import { BetaBadge } from "./BetaBadge";
 import { useEffect, useState } from "react";
 import { endDemo, isDemoMode } from "@/lib/demo";
-import { useNavigate } from "@tanstack/react-router";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { useBackendProfile } from "@/hooks/use-backend-profile";
 
 // Stable post-login core. These features must work 100%.
 const CORE = [
-  { title: "Umowy", url: "/app", icon: FileText },
+  { title: "Dashboard", url: "/app", icon: FileText },
+  { title: "Map View", url: "/map", icon: Map },
+  { title: "Contracts", url: "/contracts", icon: FileText },
   { title: "Excel Importer", url: "/import", icon: FileSpreadsheet },
   { title: "Ustawienia", url: "/settings", icon: Settings },
 ];
@@ -37,6 +41,7 @@ const CORE = [
 // Demo-only "wodotryski". Hidden in standard logged-in mode.
 const DEMO_PREVIEW = [
   { title: "Mapa nośników", url: "/map", icon: Map, beta: true },
+  { title: "Inventory", url: "/inventory", icon: Sparkles, beta: true },
   { title: "Hubert AI", url: "/ai-intake", icon: Bot, beta: true },
   { title: "AI Intake", url: "/ai-intake", icon: Sparkles, beta: true },
 ];
@@ -48,9 +53,35 @@ const RESOURCES = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const path = location.pathname;
   const [demo, setDemo] = useState(false);
+  const { user, signOut, authConfigured } = useAuth();
+  const { profile } = useBackendProfile();
   useEffect(() => setDemo(isDemoMode()), []);
+
+  const displayName = demo
+    ? "Mateusz (demo)"
+    : profile?.full_name?.trim() ||
+      user?.email ||
+      (authConfigured ? "Niezalogowany" : "Dev (lokalnie)");
+  const displaySub = demo
+    ? "Demo Mode"
+    : profile?.company_name?.trim() || (authConfigured ? "Sesja Supabase" : "Nagłówki dev");
+  const initials = (() => {
+    if (demo) return "MD";
+    const name = profile?.full_name?.trim();
+    if (name) {
+      const parts = name.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    }
+    const email = user?.email?.trim();
+    if (email) return email.slice(0, 2).toUpperCase();
+    return authConfigured ? "?" : "D";
+  })();
 
   return (
     <Sidebar collapsible="icon">
@@ -140,18 +171,27 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <DemoFooter />
-        <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-            {demo ? "MD" : "AK"}
+        <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:hidden">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
+            {initials.slice(0, 2)}
           </div>
           <div className="min-w-0 flex-1 text-xs">
-            <div className="truncate font-medium text-sidebar-foreground">
-              {demo ? "Mateusz (demo)" : "Anna Kowalska"}
-            </div>
-            <div className="truncate text-sidebar-foreground/60">
-              {demo ? "Demo Mode" : "CEO · Podlaskie Estate"}
-            </div>
+            <div className="truncate font-medium text-sidebar-foreground">{displayName}</div>
+            <div className="truncate text-sidebar-foreground/60">{displaySub}</div>
           </div>
+          {!demo && user ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-[10px]"
+              onClick={() => {
+                void signOut().then(() => navigate({ to: "/auth" }));
+              }}
+            >
+              Wyloguj
+            </Button>
+          ) : null}
         </div>
       </SidebarFooter>
     </Sidebar>
@@ -161,11 +201,16 @@ export function AppSidebar() {
 function DemoFooter() {
   const [demo, setDemo] = useState(false);
   const navigate = useNavigate();
-  useEffect(() => { setDemo(isDemoMode()); }, []);
+  useEffect(() => {
+    setDemo(isDemoMode());
+  }, []);
   if (!demo) return null;
   return (
     <button
-      onClick={() => { endDemo(); navigate({ to: "/" }); }}
+      onClick={() => {
+        endDemo();
+        navigate({ to: "/" });
+      }}
       className="mb-1 flex items-center justify-between gap-2 rounded-md border border-sidebar-primary/30 bg-sidebar-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-primary/20 group-data-[collapsible=icon]:hidden"
     >
       <span className="flex items-center gap-1.5">

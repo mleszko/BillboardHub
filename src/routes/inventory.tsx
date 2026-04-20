@@ -8,12 +8,17 @@ import { Search, MapPin, Eye } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BillboardDetailPanel } from "@/components/BillboardDetailPanel";
+import { requireSessionForAppRoute } from "@/lib/require-session";
 
 export const Route = createFileRoute("/inventory")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Inventory — BillboardHub" },
-      { name: "description", content: "Complete billboard inventory with status, format, and pricing." },
+      {
+        name: "description",
+        content: "Complete billboard inventory with status, format, and pricing.",
+      },
     ],
   }),
   component: InventoryPage,
@@ -22,7 +27,7 @@ export const Route = createFileRoute("/inventory")({
 function InventoryPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "vacant" | "critical">("all");
-  const [selected, setSelected] = useState<typeof billboards[number] | null>(null);
+  const [selected, setSelected] = useState<(typeof billboards)[number] | null>(null);
   const [open, setOpen] = useState(false);
 
   const items = useMemo(() => {

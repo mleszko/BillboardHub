@@ -1,3 +1,13 @@
+#api keys
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env.example
+backend/.env
+frontend/.env.example
+
 # Logs
 logs
 *.log
@@ -21,6 +31,7 @@ backend/.venv
 backend/__pycache__
 backend/**/*.pyc
 backend/billboardhub.db
+billboardhub.db
 
 # Wrangler / Cloudflare
 .wrangler/

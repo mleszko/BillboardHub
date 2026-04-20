@@ -79,8 +79,12 @@ async def ensure_profile(
     user: UserContext = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserContext:
+    email = user.email or "unknown@example.com"
     existing = await db.get(Profile, user.user_id)
     if existing is None:
-        db.add(Profile(user_id=user.user_id, email=user.email or "unknown@example.com"))
+        db.add(Profile(user_id=user.user_id, email=email))
+        await db.commit()
+    elif user.email and existing.email != user.email:
+        existing.email = user.email
         await db.commit()
     return user

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.auth_profile import router as auth_profile_router
 from app.api.routes.health import router as health_router
 from app.api.routes.hubert import router as hubert_router
 from app.api.routes.imports import router as imports_router
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(auth_profile_router)
 app.include_router(imports_router)
 app.include_router(hubert_router)
 app.include_router(contracts_router)

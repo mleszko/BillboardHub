@@ -6,12 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { requireSessionForAppRoute } from "@/lib/require-session";
 
 export const Route = createFileRoute("/settings")({
+  beforeLoad: () => requireSessionForAppRoute(),
   head: () => ({
     meta: [
       { title: "Settings — BillboardHub" },
-      { name: "description", content: "Manage organization profile, notifications, and integrations." },
+      {
+        name: "description",
+        content: "Manage organization profile, notifications, and integrations.",
+      },
     ],
   }),
   component: SettingsPage,
@@ -39,14 +44,33 @@ function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-base">Powiadomienia</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Toggle label="Alert: umowa wygasa < 30 dni" desc="Powiadomienie e-mail i push" defaultChecked />
+          <CardContent className="space-y-4 rounded-lg bg-muted/20 p-4 opacity-80">
+            <Toggle
+              label="Alert: umowa wygasa < 30 dni"
+              desc="Powiadomienie e-mail i push"
+              defaultChecked
+              disabled
+            />
             <Separator />
-            <Toggle label="Płatność otrzymana" desc="Powiadomienie po zaksięgowaniu wpłaty" defaultChecked />
+            <Toggle
+              label="Płatność otrzymana"
+              desc="Powiadomienie po zaksięgowaniu wpłaty"
+              defaultChecked
+              disabled
+            />
             <Separator />
-            <Toggle label="Tygodniowy raport CEO" desc="Każdy poniedziałek o 8:00" defaultChecked />
+            <Toggle
+              label="Tygodniowy raport CEO"
+              desc="Każdy poniedziałek o 8:00"
+              defaultChecked
+              disabled
+            />
             <Separator />
-            <Toggle label="Nowa umowa z AI Intake" desc="Powiadom mnie po każdej ekstrakcji" />
+            <Toggle
+              label="Nowa umowa z AI Intake"
+              desc="Powiadom mnie po każdej ekstrakcji"
+              disabled
+            />
           </CardContent>
         </Card>
 
@@ -55,10 +79,10 @@ function SettingsPage() {
             <CardTitle className="text-base">Integracje</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Integration name="Stripe" desc="Płatności online za faktury" status="connected" />
-            <Integration name="Comarch ERP XL" desc="Synchronizacja faktur i klientów" status="connected" />
-            <Integration name="Google Maps" desc="Geokodowanie nowych lokalizacji" status="connected" />
-            <Integration name="Slack" desc="Powiadomienia zespołu sprzedaży" status="not_connected" />
+            <Integration name="Stripe" desc="Płatności online za faktury" />
+            <Integration name="Comarch ERP XL" desc="Synchronizacja faktur i klientów" />
+            <Integration name="Google Maps" desc="Geokodowanie nowych lokalizacji" />
+            <Integration name="Slack" desc="Powiadomienia zespołu sprzedaży" />
           </CardContent>
         </Card>
 
@@ -79,32 +103,38 @@ function Field({ label, defaultValue }: { label: string; defaultValue: string })
   );
 }
 
-function Toggle({ label, desc, defaultChecked }: { label: string; desc: string; defaultChecked?: boolean }) {
+function Toggle({
+  label,
+  desc,
+  defaultChecked,
+  disabled,
+}: {
+  label: string;
+  desc: string;
+  defaultChecked?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <div className="text-sm font-medium">{label}</div>
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
         <div className="text-xs text-muted-foreground">{desc}</div>
       </div>
-      <Switch defaultChecked={defaultChecked} />
+      <Switch defaultChecked={defaultChecked} disabled={disabled} />
     </div>
   );
 }
 
-function Integration({ name, desc, status }: { name: string; desc: string; status: "connected" | "not_connected" }) {
+function Integration({ name, desc }: { name: string; desc: string }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
+    <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-3 opacity-80">
       <div>
         <div className="text-sm font-semibold">{name}</div>
         <div className="text-xs text-muted-foreground">{desc}</div>
       </div>
-      {status === "connected" ? (
-        <span className="rounded-full bg-success/15 px-2.5 py-1 text-[11px] font-semibold text-[oklch(0.42_0.13_155)]">
-          Połączone
-        </span>
-      ) : (
-        <Button size="sm" variant="outline">Połącz</Button>
-      )}
+      <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+        Wkrótce
+      </span>
     </div>
   );
 }

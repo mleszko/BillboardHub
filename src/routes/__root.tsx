@@ -1,5 +1,6 @@
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/contexts/AuthContext";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -35,11 +36,16 @@ export const Route = createRootRoute({
       },
       { name: "author", content: "BillboardHub" },
       { property: "og:title", content: "BillboardHub — OOH Inventory & Contracts" },
-      { property: "og:description", content: "Real-time billboard management for estate developers." },
+      {
+        property: "og:description",
+        content: "Real-time billboard management for estate developers.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
     links: [
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "apple-touch-icon", href: "/favicon.png" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "preconnect",
@@ -77,9 +83,9 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <>
+    <AuthProvider>
       <Outlet />
       <Toaster position="top-right" richColors />
-    </>
+    </AuthProvider>
   );
 }

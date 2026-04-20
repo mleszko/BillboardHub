@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -45,6 +46,10 @@ def _to_decimal(value: Any) -> Decimal | None:
         return None
 
 
+def _to_json_safe(value: Any) -> Any:
+    return json.loads(json.dumps(value, default=str))
+
+
 async def confirm_mapping_and_import(
     db: AsyncSession,
     payload: ImportMappingConfirmationRequest,
@@ -72,7 +77,7 @@ async def confirm_mapping_and_import(
         mapped.user_override = proposed.user_override
         mapped.transform_hint = proposed.transform_hint
 
-    session.status = ImportStatus.CONFIRMED
+    session.status = ImportStatus.confirmed
     required_targets = {"advertiser_name", "expiry_date"}
     selected_targets = {item.target_field_name for item in payload.mapping if item.target_field_name}
     missing_targets = required_targets.difference(selected_targets)
@@ -88,12 +93,25 @@ async def confirm_mapping_and_import(
     }
     transform_hints = {item.source_column_name: item.transform_hint for item in payload.mapping if item.transform_hint}
 
+    try:
+        storage_payload = json.loads(session.storage_path or "{}")
+    except json.JSONDecodeError as exc:
+        raise ValueError("Stored import session payload is invalid JSON.") from exc
+    source_rows = storage_payload.get("all_rows")
+    if not isinstance(source_rows, list):
+        raise ValueError("Import session has no parsed source rows. Re-upload the file and try again.")
+
     contracts_to_create: list[Contract] = []
     invalid_preview: list[dict[str, Any]] = []
     valid_rows = 0
     invalid_rows = 0
 
-    for row_index, raw_row in enumerate(payload.sampled_rows, start=1):
+    for row_index, raw_row in enumerate(source_rows, start=1):
+        if not isinstance(raw_row, dict):
+            invalid_rows += 1
+            if len(invalid_preview) < 10:
+                invalid_preview.append({"row": row_index, "errors": [{"field": "row", "reason": "Invalid row payload"}]})
+            continue
         normalized_payload: dict[str, Any] = {}
         validation_errors: list[dict[str, str]] = []
 
@@ -109,14 +127,14 @@ async def confirm_mapping_and_import(
         if not normalized_payload.get("expiry_date"):
             validation_errors.append({"field": "expiry_date", "reason": "Required field missing or invalid date"})
 
-        row_status = ImportRowStatus.INVALID if validation_errors else ImportRowStatus.VALID
+        row_status = ImportRowStatus.invalid if validation_errors else ImportRowStatus.valid
         import_row = ImportRow(
             import_session_id=session.id,
             owner_user_id=session.owner_user_id,
             source_row_number=row_index,
-            raw_payload=raw_row,
-            normalized_payload=normalized_payload,
-            validation_errors={"errors": validation_errors} if validation_errors else None,
+            raw_payload=_to_json_safe(raw_row),
+            normalized_payload=_to_json_safe(normalized_payload),
+            validation_errors=_to_json_safe({"errors": validation_errors}) if validation_errors else None,
             status=row_status,
         )
         db.add(import_row)
@@ -155,11 +173,11 @@ async def confirm_mapping_and_import(
     for contract in contracts_to_create:
         db.add(contract)
 
-    session.total_rows = len(payload.sampled_rows)
+    session.total_rows = len(source_rows)
     session.valid_rows = valid_rows
     session.invalid_rows = invalid_rows
     session.imported_rows = len(contracts_to_create)
-    session.status = ImportStatus.COMPLETED if invalid_rows == 0 else ImportStatus.FAILED
+    session.status = ImportStatus.completed if invalid_rows == 0 else ImportStatus.failed
     session.completed_at = datetime.utcnow()
 
     await db.commit()
