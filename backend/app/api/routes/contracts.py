@@ -38,14 +38,21 @@ async def list_contracts(
                 billboard_code=contract.billboard_code,
                 billboard_type=contract.billboard_type.value if contract.billboard_type else None,
                 advertiser_name=contract.advertiser_name,
+                property_owner_name=contract.property_owner_name,
                 city=contract.city,
                 location_address=contract.location_address,
                 latitude=float(contract.latitude) if contract.latitude is not None else None,
                 longitude=float(contract.longitude) if contract.longitude is not None else None,
+                surface_size=contract.surface_size,
                 start_date=contract.start_date.isoformat() if contract.start_date else None,
                 expiry_date=contract.expiry_date.isoformat(),
                 contract_status=contract.contract_status.value,
                 monthly_rent_net=_decimal_to_float(contract.monthly_rent_net),
+                total_contract_value_net=_decimal_to_float(contract.total_contract_value_net),
+                contact_person=contract.contact_person,
+                contact_phone=contract.contact_phone,
+                contact_email=contract.contact_email,
+                notes=contract.notes,
             )
             for contract in contracts
         ]

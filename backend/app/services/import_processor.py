@@ -8,14 +8,21 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
+from app.models.models import BillboardType, Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
 from app.schemas.imports import ImportExecuteResponse, ImportMappingConfirmationRequest
 from app.services.import_guesser import parse_date, parse_decimal
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
     date_fields = {"start_date", "expiry_date"}
-    decimal_fields = {"latitude", "longitude", "monthly_rent_net", "monthly_rent_gross", "vat_rate"}
+    decimal_fields = {
+        "latitude",
+        "longitude",
+        "monthly_rent_net",
+        "monthly_rent_gross",
+        "total_contract_value_net",
+        "vat_rate",
+    }
 
     if target_field_name in date_fields:
         return parse_date(value)
@@ -44,6 +51,30 @@ def _to_decimal(value: Any) -> Decimal | None:
         return Decimal(str(value))
     except Exception:  # noqa: BLE001
         return None
+
+
+def _coerce_billboard_type(raw: Any) -> BillboardType:
+    if raw is None or raw == "":
+        return BillboardType.other
+    if isinstance(raw, BillboardType):
+        return raw
+    s = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
+    aliases = {
+        "led": BillboardType.led,
+        "citylight": BillboardType.citylight,
+        "city_light": BillboardType.citylight,
+        "backlight": BillboardType.backlight,
+        "backlit": BillboardType.backlight,
+        "classic": BillboardType.classic,
+        "inny": BillboardType.other,
+        "other": BillboardType.other,
+    }
+    if s in aliases:
+        return aliases[s]
+    try:
+        return BillboardType(s)
+    except ValueError:
+        return BillboardType.other
 
 
 def _to_json_safe(value: Any) -> Any:
@@ -155,7 +186,8 @@ async def confirm_mapping_and_import(
                 advertiser_name=normalized_payload.get("advertiser_name"),
                 property_owner_name=normalized_payload.get("property_owner_name"),
                 billboard_code=normalized_payload.get("billboard_code"),
-                billboard_type=normalized_payload.get("billboard_type") or "other",
+                billboard_type=_coerce_billboard_type(normalized_payload.get("billboard_type")),
+                surface_size=normalized_payload.get("surface_size"),
                 location_address=normalized_payload.get("location_address"),
                 city=normalized_payload.get("city"),
                 latitude=_to_decimal(normalized_payload.get("latitude")),
@@ -164,8 +196,12 @@ async def confirm_mapping_and_import(
                 expiry_date=_to_date(normalized_payload.get("expiry_date")),
                 monthly_rent_net=_to_decimal(normalized_payload.get("monthly_rent_net")),
                 monthly_rent_gross=_to_decimal(normalized_payload.get("monthly_rent_gross")),
+                total_contract_value_net=_to_decimal(normalized_payload.get("total_contract_value_net")),
                 currency=normalized_payload.get("currency") or "PLN",
                 vat_rate=_to_decimal(normalized_payload.get("vat_rate")),
+                contact_person=normalized_payload.get("contact_person"),
+                contact_phone=normalized_payload.get("contact_phone"),
+                contact_email=normalized_payload.get("contact_email"),
                 notes=normalized_payload.get("notes"),
             )
         )

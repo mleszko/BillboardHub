@@ -7,6 +7,7 @@ CANONICAL_FIELDS = [
     "property_owner_name",
     "billboard_code",
     "billboard_type",
+    "surface_size",
     "location_address",
     "city",
     "latitude",
@@ -15,8 +16,12 @@ CANONICAL_FIELDS = [
     "expiry_date",
     "monthly_rent_net",
     "monthly_rent_gross",
+    "total_contract_value_net",
     "currency",
     "vat_rate",
+    "contact_person",
+    "contact_phone",
+    "contact_email",
     "notes",
 ]
 REQUIRED_IMPORT_FIELDS = {"advertiser_name", "expiry_date"}
@@ -79,14 +84,21 @@ class ContractsListItem(BaseModel):
     billboard_code: str | None = None
     billboard_type: str | None = None
     advertiser_name: str
+    property_owner_name: str | None = None
     city: str | None
     location_address: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    surface_size: str | None = None
     start_date: str | None = None
     expiry_date: str
     contract_status: str
     monthly_rent_net: float | None
+    total_contract_value_net: float | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    notes: str | None = None
 
 
 class ContractsListResponse(BaseModel):
