@@ -63,18 +63,20 @@ interface Column {
   confidence: number;
 }
 
-const MOCK_COLUMNS: Column[] = [
-  { excel: "Nr", sample: "BIA-014", guess: "code", confidence: 99 },
-  { excel: "Miejsce", sample: "Białystok", guess: "city", confidence: 97 },
-  { excel: "Adres / lokalizacja", sample: "ul. Lipowa 32", guess: "address", confidence: 95 },
-  { excel: "Najemca", sample: "Orange Polska", guess: "client", confidence: 94 },
-  { excel: "Stawka mies. PLN", sample: "4 200", guess: "monthlyPrice", confidence: 96 },
-  { excel: "Start", sample: "01.03.2024", guess: "contractStart", confidence: 92 },
-  { excel: "Koniec", sample: "28.02.2026", guess: "contractEnd", confidence: 98 },
-  { excel: "Typ konstrukcji", sample: "Backlight", guess: "type", confidence: 90 },
-  { excel: "Wymiary", sample: "6x3 m", guess: "size", confidence: 88 },
-  { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
-];
+function getMockColumns(): Column[] {
+  return [
+    { excel: "Nr", sample: "BIA-014", guess: "code", confidence: 99 },
+    { excel: "Miejsce", sample: "Białystok", guess: "city", confidence: 97 },
+    { excel: "Adres / lokalizacja", sample: "ul. Lipowa 32", guess: "address", confidence: 95 },
+    { excel: "Najemca", sample: "Orange Polska", guess: "client", confidence: 94 },
+    { excel: "Stawka mies. PLN", sample: "4 200", guess: "monthlyPrice", confidence: 96 },
+    { excel: "Start", sample: "01.03.2024", guess: "contractStart", confidence: 92 },
+    { excel: "Koniec", sample: "28.02.2026", guess: "contractEnd", confidence: 98 },
+    { excel: "Typ konstrukcji", sample: "Backlight", guess: "type", confidence: 90 },
+    { excel: "Wymiary", sample: "6x3 m", guess: "size", confidence: 88 },
+    { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
+  ];
+}
 
 // Mocked imported rows produced when the user confirms the wizard.
 // In a real build these would come from the parsed file + mapping.
