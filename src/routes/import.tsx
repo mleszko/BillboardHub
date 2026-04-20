@@ -76,6 +76,46 @@ const MOCK_COLUMNS: Column[] = [
   { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
 ];
 
+// Mocked imported rows produced when the user confirms the wizard.
+// In a real build these would come from the parsed file + mapping.
+function buildImportedRows(): Billboard[] {
+  const today = Date.now();
+  const day = 86_400_000;
+  const samples: Array<Partial<Billboard> & { code: string; client: string; days: number; price: number; city: string; address: string }> = [
+    { code: "USR-001", client: "Rossmann", days: 360, price: 5200, city: "Białystok", address: "ul. Lipowa 12" },
+    { code: "USR-002", client: "DM Drogerie", days: 420, price: 4800, city: "Białystok", address: "al. Piłsudskiego 8" },
+    { code: "USR-003", client: "Lewiatan", days: 510, price: 3100, city: "Łomża", address: "ul. Wojska Polskiego 14" },
+    { code: "USR-004", client: "Tesco", days: 25, price: 4400, city: "Suwałki", address: "ul. Kościuszki 71" },
+    { code: "USR-005", client: "Pepco", days: 50, price: 3900, city: "Augustów", address: "ul. Rynek 3" },
+  ];
+  return samples.map((s, i) => ({
+    id: `imported-${today}-${i}`,
+    code: s.code,
+    city: s.city,
+    address: s.address,
+    lat: 53.13,
+    lng: 23.16,
+    type: "Backlight",
+    size: "6 × 3 m",
+    monthlyPrice: s.price,
+    status: s.days <= 30 ? "critical" : s.days <= 60 ? "expiring_soon" : "active",
+    client: s.client,
+    contractStart: new Date(today - 200 * day).toISOString(),
+    contractEnd: new Date(today + s.days * day).toISOString(),
+    creativePhoto: "",
+    dailyImpressions: 20000,
+  }));
+}
+  { excel: "Adres / lokalizacja", sample: "ul. Lipowa 32", guess: "address", confidence: 95 },
+  { excel: "Najemca", sample: "Orange Polska", guess: "client", confidence: 94 },
+  { excel: "Stawka mies. PLN", sample: "4 200", guess: "monthlyPrice", confidence: 96 },
+  { excel: "Start", sample: "01.03.2024", guess: "contractStart", confidence: 92 },
+  { excel: "Koniec", sample: "28.02.2026", guess: "contractEnd", confidence: 98 },
+  { excel: "Typ konstrukcji", sample: "Backlight", guess: "type", confidence: 90 },
+  { excel: "Wymiary", sample: "6x3 m", guess: "size", confidence: 88 },
+  { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
+];
+
 function ImportPage() {
   const [stage, setStage] = useState<Stage>("upload");
   const [fileName, setFileName] = useState("");
