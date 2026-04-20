@@ -117,6 +117,49 @@ Copy from `frontend/.env.example`:
 4. Set `NEXT_PUBLIC_BACKEND_URL` to Railway backend public URL.
 5. Deploy.
 
+## GitHub Automation (CI/CD)
+
+This repo now includes GitHub Actions workflows:
+
+- `/.github/workflows/ci.yml`
+  - runs on PRs and pushes
+  - backend: install deps, `python -m compileall app`, `pytest -q`
+  - frontend: `npm ci`, `npm run lint`, `npm run build`
+- `/.github/workflows/deploy.yml`
+  - runs on push to `main` (and manual dispatch)
+  - deploys backend to Railway **if** Railway secrets are present
+  - deploys frontend to Vercel **if** Vercel secrets are present
+
+### Required GitHub Secrets
+
+For Railway auto-deploy:
+- `RAILWAY_TOKEN`
+- `RAILWAY_SERVICE_ID`
+
+For Vercel auto-deploy:
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+If secrets are missing, deploy jobs are skipped safely.
+
+## Free-Tier Practical Plan (single-user demo)
+
+For your current stage (demo + likely one user), this setup is realistic on free tiers:
+
+- **Supabase Free**: DB + Auth
+- **Railway**: backend service (watch monthly usage limits/sleep behavior)
+- **Vercel Hobby**: frontend
+
+Recommended rollout:
+1. Configure Supabase project and env values.
+2. Deploy backend on Railway once manually to verify env wiring.
+3. Deploy frontend on Vercel once manually.
+4. Add the GitHub secrets above.
+5. Merge to `main` and let workflows handle auto-test + auto-deploy.
+
+Important: free tiers can throttle/sleep; acceptable for demo but not for strict uptime SLAs.
+
 ## Notes on Existing Mock
 
 The original mock app is still present in the repository root and has not been deleted.

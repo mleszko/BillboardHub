@@ -11,3 +11,5 @@ openpyxl
 openai
 supabase
 python-jose[cryptography]
+pytest
+httpx
