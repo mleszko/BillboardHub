@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Billboard } from "@/lib/mock-data";
+import type { LatLngTuple, Map as LeafletMap, Marker } from "leaflet";
 
 interface BillboardMapProps {
   billboards: Billboard[];
@@ -18,45 +18,57 @@ const colorClass: Record<Billboard["status"], string> = {
 
 export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const leafletRef = useRef<typeof import("leaflet") | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<Map<string, Marker>>(new Map());
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current || mapRef.current || typeof window === "undefined") return;
+    let cancelled = false;
 
-    const map = L.map(containerRef.current, {
-      zoomControl: true,
-      attributionControl: false,
-    }).setView([53.4, 23.0], 8);
+    const init = async () => {
+      const L = await import("leaflet");
+      if (cancelled || !containerRef.current) return;
+      leafletRef.current = L;
 
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-      {
-        maxZoom: 19,
-        subdomains: "abcd",
-      },
-    ).addTo(map);
+      const map = L.map(containerRef.current, {
+        zoomControl: true,
+        attributionControl: false,
+      }).setView([53.4, 23.0], 8);
 
-    L.control.attribution({ prefix: false }).addAttribution("© OSM, CARTO").addTo(map);
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        {
+          maxZoom: 19,
+          subdomains: "abcd",
+        },
+      ).addTo(map);
 
-    mapRef.current = map;
+      L.control.attribution({ prefix: false }).addAttribution("© OSM, CARTO").addTo(map);
+      mapRef.current = map;
+    };
+
+    void init();
 
     return () => {
-      map.remove();
+      cancelled = true;
+      mapRef.current?.remove();
       mapRef.current = null;
+      leafletRef.current = null;
       markersRef.current.clear();
     };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const L = leafletRef.current;
+    if (!map || !L) return;
 
     // Clear existing
     markersRef.current.forEach((m) => m.remove());
     markersRef.current.clear();
 
-    const bounds: L.LatLngTuple[] = [];
+    const bounds: LatLngTuple[] = [];
 
     billboards.forEach((b) => {
       const lat = Number(b.lat);
@@ -95,7 +107,12 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
     const map = mapRef.current;
     if (!map || !selectedId) return;
     const b = billboards.find((x) => x.id === selectedId);
-    if (b) map.flyTo([b.lat, b.lng], 14, { duration: 0.8 });
+    if (!b) return;
+    const lat = Number(b.lat);
+    const lng = Number(b.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      map.flyTo([lat, lng], 14, { duration: 0.8 });
+    }
   }, [selectedId, billboards]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
