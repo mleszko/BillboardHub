@@ -13,7 +13,7 @@ import {
   Check,
   Coffee,
 } from "lucide-react";
-import { startDemo } from "@/lib/demo";
+import { demoName, startDemo } from "@/lib/demo";
 import { BetaBadge } from "@/components/BetaBadge";
 
 export const Route = createFileRoute("/")({
@@ -37,9 +37,11 @@ export const Route = createFileRoute("/")({
 
 function LandingPage() {
   const navigate = useNavigate();
+  const heroName = demoName();
+  const heroLead = heroName ? `${heroName}, szybki audyt: ` : "Szybki audyt: ";
 
   const tryDemo = () => {
-    startDemo("Mateusz");
+    startDemo(heroName);
     navigate({ to: "/app" });
   };
 
@@ -127,7 +129,7 @@ function LandingPage() {
                       Hubert · AI doradca
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-foreground">
-                      Mateusz, szybki audyt: Twoje{" "}
+                      {heroLead}Twoje{" "}
                       <span className="font-semibold text-success">ROI jest 15% powyżej średniej regionalnej</span>.
                       Dobra robota — masz potencjał na +8% przychodu po optymalizacji renewal.
                     </p>

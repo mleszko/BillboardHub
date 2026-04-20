@@ -24,10 +24,11 @@ import {
 } from "@/components/ui/sidebar";
 import { BetaBadge } from "./BetaBadge";
 import { useEffect, useState } from "react";
-import { endDemo, isDemoMode } from "@/lib/demo";
+import { demoName, endDemo, isDemoMode } from "@/lib/demo";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useBackendProfile } from "@/hooks/use-backend-profile";
+import { resolveUserFirstName } from "@/lib/user-name";
 
 // Stable post-login core. These features must work 100%.
 const CORE = [
@@ -59,9 +60,16 @@ export function AppSidebar() {
   const { user, signOut, authConfigured } = useAuth();
   const { profile } = useBackendProfile();
   useEffect(() => setDemo(isDemoMode()), []);
+  const firstName = resolveUserFirstName({
+    demo,
+    demoSessionName: demoName(),
+    profileFullName: profile?.full_name,
+    userEmail: user?.email,
+    userMetadata: user?.user_metadata as Record<string, unknown> | null | undefined,
+  });
 
   const displayName = demo
-    ? "Mateusz (demo)"
+    ? `${firstName || "Demo"} (demo)`
     : profile?.full_name?.trim() ||
       user?.email ||
       (authConfigured ? "Niezalogowany" : "Dev (lokalnie)");
