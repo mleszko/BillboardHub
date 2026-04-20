@@ -191,8 +191,18 @@ export function HubertWidget() {
   }, []);
 
   useEffect(() => {
-    if (!mounted || (!demo && (authLoading || profileLoading))) return;
+    if (!mounted) return;
+    if (!demo && (authLoading || profileLoading)) return;
+    if (!demo && liveSummary === null) return;
     if (messages.length === 0) {
+      const liveGreeting =
+        liveSummary && liveSummary.total === 0
+          ? firstName
+            ? `Cześć ${firstName}! Jestem Hubert. **Zaimportuj umowy** z Excela — wtedy podpowiem na podstawie Twoich realnych danych.`
+            : `Cześć! Jestem Hubert. **Zaimportuj umowy** z Excela — wtedy podpowiem na podstawie Twoich realnych danych.`
+          : firstName
+            ? `Cześć ${firstName}! Jestem Hubert. Widzę **${liveSummary?.total ?? 0} kontraktów** w koncie, przychód ok. **${formatPLN(liveSummary?.monthlyRevenue ?? 0)}**/mc — pytaj o renewal, stawki lub priorytety.`
+            : `Cześć! Jestem Hubert. Widzę **${liveSummary?.total ?? 0} kontraktów** w koncie, przychód ok. **${formatPLN(liveSummary?.monthlyRevenue ?? 0)}**/mc — pytaj o renewal, stawki lub priorytety.`;
       setMessages([
         {
           id: 1,
@@ -201,13 +211,11 @@ export function HubertWidget() {
             ? firstName
               ? `Cześć ${firstName}! Przeanalizowałem Twój portfel w Białymstoku. Twoje **ROI jest 15% powyżej średniej** — jesteś profesjonalistą! Zapytaj mnie o cokolwiek związanego ze strategią billboardową.`
               : `Cześć! Przeanalizowałem Twój portfel w Białymstoku. Twoje **ROI jest 15% powyżej średniej** — jesteś profesjonalistą! Zapytaj mnie o cokolwiek związanego ze strategią billboardową.`
-            : firstName
-              ? `Cześć ${firstName}! Jestem Hubert, Twój doradca ds. billboardów. Odpowiadam na podstawie Twoich realnych kontraktów z konta.`
-              : `Cześć! Jestem Hubert, Twój doradca ds. billboardów. Odpowiadam na podstawie Twoich realnych kontraktów z konta.`,
+            : liveGreeting,
         },
       ]);
     }
-  }, [authLoading, demo, firstName, mounted, messages.length, profileLoading]);
+  }, [authLoading, demo, firstName, liveSummary, mounted, messages.length, profileLoading]);
 
   useEffect(() => {
     if (scrollRef.current) {
