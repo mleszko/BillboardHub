@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HubertWidget } from "./HubertWidget";
+import { useEffect, useState } from "react";
+import { isDemoMode } from "@/lib/demo";
 
 interface AppShellProps {
   children: ReactNode;
@@ -15,6 +17,8 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, title, subtitle, actions }: AppShellProps) {
+  const [demo, setDemo] = useState(false);
+  useEffect(() => setDemo(isDemoMode()), []);
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -50,7 +54,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
         </div>
         <main className="flex-1 bg-background">{children}</main>
       </SidebarInset>
-      <HubertWidget />
+      {demo && <HubertWidget />}
     </SidebarProvider>
   );
 }
