@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { HubertWidget } from "./HubertWidget";
 import { useEffect, useState } from "react";
 import { isDemoMode } from "@/lib/demo";
+import { stats } from "@/lib/mock-data";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 
 interface AppShellProps {
   children: ReactNode;
@@ -16,9 +18,65 @@ interface AppShellProps {
   actions?: ReactNode;
 }
 
+type ContractsResponse = {
+  items: Array<{
+    expiry_date: string;
+  }>;
+};
+
+const DEV_USER_ID = "demo-user-1";
+const DEV_USER_EMAIL = "demo@billboardhub.local";
+const API_BASE_URL =
+  (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
+  "http://localhost:8000";
+const GLOBAL_SEARCH_KEY = "bbhub:global-search-value";
+
 export function AppShell({ children, title, subtitle, actions }: AppShellProps) {
-  const [demo, setDemo] = useState(false);
-  useEffect(() => setDemo(isDemoMode()), []);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [notifications, setNotifications] = useState(0);
+  const [globalSearch, setGlobalSearch] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    const loadNotifications = async () => {
+      if (isDemoMode()) {
+        if (alive) setNotifications(stats().expiring30);
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/contracts`, {
+          headers: {
+            "x-dev-user-id": DEV_USER_ID,
+            "x-dev-user-email": DEV_USER_EMAIL,
+          },
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as ContractsResponse;
+        const now = Date.now();
+        const expiring30 = (payload.items ?? []).filter((item) => {
+          const days = Math.ceil(
+            (new Date(item.expiry_date).getTime() - now) / (1000 * 60 * 60 * 24),
+          );
+          return days <= 30;
+        }).length;
+        if (alive) setNotifications(expiring30);
+      } catch {
+        if (alive) setNotifications(0);
+      }
+    };
+    void loadNotifications();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const current = window.sessionStorage.getItem(GLOBAL_SEARCH_KEY) || "";
+    setGlobalSearch(current);
+  }, []);
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -37,13 +95,35 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
               <Input
                 placeholder="Szukaj billboardu, klienta…"
                 className="h-9 w-64 pl-8"
+                value={globalSearch}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setGlobalSearch(value);
+                  window.sessionStorage.setItem(GLOBAL_SEARCH_KEY, value);
+                  window.dispatchEvent(
+                    new CustomEvent("bbhub:global-search", { detail: value }),
+                  );
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  const query = (e.currentTarget.value || "").trim();
+                  window.sessionStorage.setItem(GLOBAL_SEARCH_KEY, query);
+                  window.dispatchEvent(
+                    new CustomEvent("bbhub:global-search", { detail: query }),
+                  );
+                  if (location.pathname !== "/contracts") {
+                    navigate({ to: "/contracts" });
+                  }
+                }}
               />
             </div>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-4 w-4" />
-              <Badge className="absolute -right-0.5 -top-0.5 h-4 min-w-4 rounded-full bg-destructive p-0 text-[10px] text-destructive-foreground">
-                3
-              </Badge>
+              {notifications > 0 && (
+                <Badge className="absolute -right-0.5 -top-0.5 h-4 min-w-4 rounded-full bg-destructive p-0 text-[10px] text-destructive-foreground">
+                  {notifications}
+                </Badge>
+              )}
             </Button>
             {actions}
           </div>
@@ -54,7 +134,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
         </div>
         <main className="flex-1 bg-background">{children}</main>
       </SidebarInset>
-      {demo && <HubertWidget />}
+      <HubertWidget />
     </SidebarProvider>
   );
 }

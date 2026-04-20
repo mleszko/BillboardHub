@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BetaBadge } from "@/components/BetaBadge";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -23,9 +23,7 @@ import {
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
-import { appendImported } from "@/lib/data-store";
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { Billboard } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/import")({
   head: () => ({
@@ -43,94 +41,162 @@ export const Route = createFileRoute("/import")({
 
 type Stage = "upload" | "analyzing" | "mapping" | "preview" | "done";
 
-const SYSTEM_FIELDS = [
-  { value: "code", label: "Kod billboardu" },
-  { value: "city", label: "Miasto" },
-  { value: "address", label: "Adres" },
-  { value: "client", label: "Klient" },
-  { value: "monthlyPrice", label: "Cena / mies." },
-  { value: "contractStart", label: "Data początku" },
-  { value: "contractEnd", label: "Data wygaśnięcia (Expiry)" },
-  { value: "type", label: "Typ nośnika" },
-  { value: "size", label: "Rozmiar" },
-  { value: "ignore", label: "— Ignoruj kolumnę —" },
-];
+const TARGET_FIELDS = [
+  "contract_number",
+  "advertiser_name",
+  "property_owner_name",
+  "billboard_code",
+  "billboard_type",
+  "location_address",
+  "city",
+  "latitude",
+  "longitude",
+  "start_date",
+  "expiry_date",
+  "monthly_rent_net",
+  "monthly_rent_gross",
+  "currency",
+  "vat_rate",
+  "notes",
+  "ignore",
+] as const;
 
-interface Column {
-  excel: string;
-  sample: string;
-  guess: string;
-  confidence: number;
-}
+type MappingRow = {
+  source_column_name: string;
+  target_field_name: string | null;
+  guessed_confidence: number;
+  transform_hint: string | null;
+};
 
-function getMockColumns(): Column[] {
-  return [
-    { excel: "Nr", sample: "BIA-014", guess: "code", confidence: 99 },
-    { excel: "Miejsce", sample: "Białystok", guess: "city", confidence: 97 },
-    { excel: "Adres / lokalizacja", sample: "ul. Lipowa 32", guess: "address", confidence: 95 },
-    { excel: "Najemca", sample: "Orange Polska", guess: "client", confidence: 94 },
-    { excel: "Stawka mies. PLN", sample: "4 200", guess: "monthlyPrice", confidence: 96 },
-    { excel: "Start", sample: "01.03.2024", guess: "contractStart", confidence: 92 },
-    { excel: "Koniec", sample: "28.02.2026", guess: "contractEnd", confidence: 98 },
-    { excel: "Typ konstrukcji", sample: "Backlight", guess: "type", confidence: 90 },
-    { excel: "Wymiary", sample: "6x3 m", guess: "size", confidence: 88 },
-    { excel: "Notatki", sample: "—", guess: "ignore", confidence: 70 },
-  ];
-}
+type MappingProposalResponse = {
+  session_id: string;
+  file_name: string;
+  owner_user_id: string;
+  total_rows: number;
+  columns: string[];
+  mapping_suggestions: MappingRow[];
+  guessed_by_model: string;
+  warning: string | null;
+};
 
-// Mocked imported rows produced when the user confirms the wizard.
-// In a real build these would come from the parsed file + mapping.
-function buildImportedRows(): Billboard[] {
-  const today = Date.now();
-  const day = 86_400_000;
-  const samples: Array<Partial<Billboard> & { code: string; client: string; days: number; price: number; city: string; address: string }> = [
-    { code: "USR-001", client: "Rossmann", days: 360, price: 5200, city: "Białystok", address: "ul. Lipowa 12" },
-    { code: "USR-002", client: "DM Drogerie", days: 420, price: 4800, city: "Białystok", address: "al. Piłsudskiego 8" },
-    { code: "USR-003", client: "Lewiatan", days: 510, price: 3100, city: "Łomża", address: "ul. Wojska Polskiego 14" },
-    { code: "USR-004", client: "Tesco", days: 25, price: 4400, city: "Suwałki", address: "ul. Kościuszki 71" },
-    { code: "USR-005", client: "Pepco", days: 50, price: 3900, city: "Augustów", address: "ul. Rynek 3" },
-  ];
-  return samples.map((s, i) => ({
-    id: `imported-${today}-${i}`,
-    code: s.code,
-    city: s.city,
-    address: s.address,
-    lat: 53.13,
-    lng: 23.16,
-    type: "Backlight",
-    size: "6 × 3 m",
-    monthlyPrice: s.price,
-    status: s.days <= 30 ? "critical" : s.days <= 60 ? "expiring_soon" : "active",
-    client: s.client,
-    contractStart: new Date(today - 200 * day).toISOString(),
-    contractEnd: new Date(today + s.days * day).toISOString(),
-    creativePhoto: "",
-    dailyImpressions: 20000,
-  }));
-}
+type ImportExecuteResponse = {
+  session_id: string;
+  status: string;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+  imported_rows: number;
+};
+
+const DEV_USER_ID = "demo-user-1";
+const DEV_USER_EMAIL = "demo@billboardhub.local";
+const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") || "http://localhost:8000";
 
 function ImportPage() {
+  const navigate = useNavigate();
   const [stage, setStage] = useState<Stage>("upload");
-  const [fileName, setFileName] = useState("");
-  const [columns, setColumns] = useState<Column[]>([]);
+  const [proposal, setProposal] = useState<MappingProposalResponse | null>(null);
+  const [mapping, setMapping] = useState<MappingRow[]>([]);
+  const [result, setResult] = useState<ImportExecuteResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
 
-  const startImport = () => {
-    setFileName("portfolio_billboardow_2025.xlsx");
+  const requiredTargetsMissing = useMemo(() => {
+    const selected = new Set(mapping.map((item) => item.target_field_name).filter(Boolean));
+    return !selected.has("advertiser_name") || !selected.has("expiry_date");
+  }, [mapping]);
+
+  const uploadFile = async (file: File) => {
+    setError(null);
+    setResult(null);
+    setIsBusy(true);
     setStage("analyzing");
-    setTimeout(() => {
-      setColumns(getMockColumns());
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${API_BASE_URL}/imports/guess-mapping`, {
+        method: "POST",
+        headers: {
+          "x-dev-user-id": DEV_USER_ID,
+          "x-dev-user-email": DEV_USER_EMAIL,
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się odczytać i zmapować pliku.");
+      }
+      const data = (await response.json()) as MappingProposalResponse;
+      setProposal(data);
+      setMapping(data.mapping_suggestions);
       setStage("mapping");
-    }, 1900);
+      if (data.warning) {
+        toast.warning(data.warning);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload nie powiódł się.");
+      setStage("upload");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const updateMapping = (i: number, value: string) => {
-    setColumns((cs) => cs.map((c, idx) => (idx === i ? { ...c, guess: value } : c)));
+    setMapping((rows) =>
+      rows.map((row, idx) =>
+        idx === i
+          ? { ...row, target_field_name: value === "ignore" ? null : value }
+          : row,
+      ),
+    );
+  };
+
+  const confirmImport = async () => {
+    if (!proposal) return;
+    setError(null);
+    setIsBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/imports/confirm-mapping`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-dev-user-id": DEV_USER_ID,
+          "x-dev-user-email": DEV_USER_EMAIL,
+        },
+        body: JSON.stringify({
+          session_id: proposal.session_id,
+          owner_user_id: proposal.owner_user_id,
+          mapping: mapping.map((item) => ({
+            source_column_name: item.source_column_name,
+            target_field_name: item.target_field_name,
+            confirmed_by_user: true,
+            user_override: true,
+            transform_hint: item.transform_hint ?? null,
+          })),
+        }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Potwierdzenie mapowania nie powiodło się.");
+      }
+      const data = (await response.json()) as ImportExecuteResponse;
+      setResult(data);
+      toast.success(`Zaimportowano ${data.imported_rows} rekordów.`);
+      await navigate({ to: "/app" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import nie powiódł się.");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const reset = () => {
     setStage("upload");
-    setFileName("");
-    setColumns([]);
+    setProposal(null);
+    setMapping([]);
+    setResult(null);
+    setError(null);
+    setIsBusy(false);
   };
 
   return (
@@ -181,10 +247,7 @@ function ImportPage() {
         </Card>
 
         {stage === "upload" && (
-          <Card
-            className="cursor-pointer border-2 border-dashed transition-colors hover:border-primary hover:bg-primary/5"
-            onClick={startImport}
-          >
+          <Card className="border-2 border-dashed transition-colors hover:border-primary hover:bg-primary/5">
             <CardContent className="flex flex-col items-center justify-center gap-4 p-12 text-center">
               <div className="relative">
                 <div className="absolute inset-0 animate-pulse rounded-full bg-success/15 blur-xl" />
@@ -200,8 +263,19 @@ function ImportPage() {
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2 sm:flex-row">
-                <Button size="lg" className="gap-2">
-                  <FileSpreadsheet className="h-4 w-4" /> Wybierz plik (demo)
+                <Button asChild size="lg" className="gap-2" disabled={isBusy}>
+                  <label>
+                    <FileSpreadsheet className="h-4 w-4" /> {isBusy ? "Przetwarzanie..." : "Wybierz plik"}
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void uploadFile(file);
+                      }}
+                    />
+                  </label>
                 </Button>
                 <Button size="lg" variant="outline" className="gap-2" asChild onClick={(e) => e.stopPropagation()}>
                   <a
@@ -247,8 +321,8 @@ function ImportPage() {
                 <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-info" />
                 <div className="flex-1 text-sm">
                   <div className="font-medium">
-                    Wykryto {columns.length} kolumn w pliku{" "}
-                    <span className="font-mono text-xs">{fileName}</span>
+                    Wykryto {mapping.length} kolumn w pliku{" "}
+                    <span className="font-mono text-xs">{proposal?.file_name}</span>
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     Sprawdź mapowanie. Możesz zmienić każde pole ręcznie.
@@ -265,29 +339,29 @@ function ImportPage() {
                   <div className="col-span-1 text-right">Conf.</div>
                 </div>
                 <div className="divide-y">
-                  {columns.map((c, i) => (
-                    <div key={i} className="grid grid-cols-12 items-center gap-2 px-3 py-2.5">
+                  {mapping.map((c, i) => (
+                    <div key={c.source_column_name} className="grid grid-cols-12 items-center gap-2 px-3 py-2.5">
                       <div className="col-span-4 min-w-0">
-                        <div className="truncate text-sm font-medium">{c.excel}</div>
+                        <div className="truncate text-sm font-medium">{c.source_column_name}</div>
                       </div>
                       <div className="col-span-3 min-w-0">
                         <div className="truncate font-mono text-xs text-muted-foreground">
-                          {c.sample}
+                          {c.transform_hint || "—"}
                         </div>
                       </div>
                       <div className="col-span-4 flex items-center gap-1.5">
                         <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <Select
-                          value={c.guess}
+                          value={c.target_field_name ?? "ignore"}
                           onValueChange={(v) => updateMapping(i, v)}
                         >
                           <SelectTrigger className="h-8 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {SYSTEM_FIELDS.map((f) => (
-                              <SelectItem key={f.value} value={f.value} className="text-xs">
-                                {f.label}
+                            {TARGET_FIELDS.map((f) => (
+                              <SelectItem key={f} value={f} className="text-xs">
+                                {f}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -297,14 +371,14 @@ function ImportPage() {
                         <span
                           className={cn(
                             "text-[11px] font-semibold tabular-nums",
-                            c.confidence >= 95
+                            c.guessed_confidence >= 0.95
                               ? "text-success"
-                              : c.confidence >= 80
+                              : c.guessed_confidence >= 0.8
                               ? "text-warning-foreground"
                               : "text-muted-foreground",
                           )}
                         >
-                          {c.confidence}%
+                          {Math.round(c.guessed_confidence * 100)}%
                         </span>
                       </div>
                     </div>
@@ -316,10 +390,15 @@ function ImportPage() {
                 <Button variant="ghost" onClick={reset}>
                   Anuluj
                 </Button>
-                <Button className="gap-2" onClick={() => setStage("preview")}>
-                  Podgląd 47 wierszy <ArrowRight className="h-4 w-4" />
+                <Button className="gap-2" disabled={requiredTargetsMissing || isBusy} onClick={() => setStage("preview")}>
+                  Podgląd importu <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
+              {requiredTargetsMissing && (
+                <p className="text-xs text-destructive">
+                  Wymagane mapowanie pól: <code>advertiser_name</code> i <code>expiry_date</code>.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -332,7 +411,7 @@ function ImportPage() {
                 <div className="flex-1 text-sm">
                   <div className="font-medium">Gotowy do importu</div>
                   <div className="text-xs text-muted-foreground">
-                    47 wierszy poprawnych · 2 wiersze wymagają uwagi
+                    Sesja: <span className="font-mono">{proposal?.session_id}</span>
                   </div>
                 </div>
               </div>
@@ -350,25 +429,20 @@ function ImportPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {[
-                      ["BIA-014", "Białystok", "Rossmann", "5 200", "12.04.2026", "ok"],
-                      ["BIA-015", "Białystok", "DM Drogerie", "4 800", "30.06.2026", "ok"],
-                      ["SUW-004", "Suwałki", "Tesco", "—", "31.12.2025", "warn"],
-                      ["LOM-003", "Łomża", "Lewiatan", "3 100", "15.09.2026", "ok"],
-                    ].map(([code, city, client, price, end, status], i) => (
-                      <tr key={i}>
-                        <td className="px-3 py-2 font-mono text-[11px] font-semibold">{code}</td>
-                        <td className="px-3 py-2">{city}</td>
-                        <td className="px-3 py-2">{client}</td>
-                        <td className="px-3 py-2 tabular-nums">{price}</td>
-                        <td className="px-3 py-2 tabular-nums">{end}</td>
+                    {mapping.slice(0, 8).map((row) => (
+                      <tr key={row.source_column_name}>
+                        <td className="px-3 py-2 font-mono text-[11px] font-semibold">{row.source_column_name}</td>
+                        <td className="px-3 py-2">{row.target_field_name || "—"}</td>
+                        <td className="px-3 py-2">{proposal?.guessed_by_model || "—"}</td>
+                        <td className="px-3 py-2 tabular-nums">{Math.round(row.guessed_confidence * 100)}%</td>
+                        <td className="px-3 py-2 tabular-nums">{row.transform_hint || "—"}</td>
                         <td className="px-3 py-2">
-                          {status === "warn" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-warning-foreground">
-                              <AlertTriangle className="h-3 w-3" /> Brak ceny
-                            </span>
-                          ) : (
+                          {row.target_field_name ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-warning-foreground">
+                              <AlertTriangle className="h-3 w-3" /> Niezmapowane
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -383,13 +457,11 @@ function ImportPage() {
                 </Button>
                 <Button
                   className="gap-2"
-                  onClick={() => {
-                    appendImported(buildImportedRows());
-                    toast.success("Zaimportowano 47 nośników do portfela");
-                    setStage("done");
-                  }}
+                  disabled={isBusy || requiredTargetsMissing}
+                  onClick={() => void confirmImport()}
                 >
-                  <CheckCircle2 className="h-4 w-4" /> Importuj 47 wierszy
+                  <CheckCircle2 className="h-4 w-4" />
+                  {isBusy ? "Importowanie..." : "Potwierdź mapowanie i import"}
                 </Button>
               </div>
             </CardContent>
@@ -405,20 +477,23 @@ function ImportPage() {
               <div>
                 <h3 className="text-lg font-semibold">Import zakończony sukcesem!</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  47 nowych nośników jest już w Twoim rejestrze.
+                  Zaimportowano {result?.imported_rows ?? 0} rekordów (z {result?.total_rows ?? 0}).
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button asChild className="gap-2">
-                  <Link to="/app">
-                    Otwórz dashboard <ArrowRight className="h-4 w-4" />
-                  </Link>
+                <Button className="gap-2" onClick={() => navigate({ to: "/app" })}>
+                  Otwórz dashboard <ArrowRight className="h-4 w-4" />
                 </Button>
                 <Button onClick={reset} variant="outline">
                   Zaimportuj kolejny plik
                 </Button>
               </div>
             </CardContent>
+          </Card>
+        )}
+        {error && (
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
           </Card>
         )}
       </div>

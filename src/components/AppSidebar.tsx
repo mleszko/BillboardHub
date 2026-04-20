@@ -29,7 +29,9 @@ import { useNavigate } from "@tanstack/react-router";
 
 // Stable post-login core. These features must work 100%.
 const CORE = [
-  { title: "Umowy", url: "/app", icon: FileText },
+  { title: "Dashboard", url: "/app", icon: FileText },
+  { title: "Map View", url: "/map", icon: Map },
+  { title: "Contracts", url: "/contracts", icon: FileText },
   { title: "Excel Importer", url: "/import", icon: FileSpreadsheet },
   { title: "Ustawienia", url: "/settings", icon: Settings },
 ];
@@ -37,6 +39,7 @@ const CORE = [
 // Demo-only "wodotryski". Hidden in standard logged-in mode.
 const DEMO_PREVIEW = [
   { title: "Mapa nośników", url: "/map", icon: Map, beta: true },
+  { title: "Inventory", url: "/inventory", icon: Sparkles, beta: true },
   { title: "Hubert AI", url: "/ai-intake", icon: Bot, beta: true },
   { title: "AI Intake", url: "/ai-intake", icon: Sparkles, beta: true },
 ];

@@ -100,6 +100,9 @@ function LandingPage() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
                 <Button asChild variant="outline" size="lg">
+                  <a href="/auth">Login</a>
+                </Button>
+                <Button asChild variant="outline" size="lg">
                   <Link to="/roadmap">Zobacz roadmap</Link>
                 </Button>
               </div>
@@ -113,6 +116,23 @@ function LandingPage() {
                 <span className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-success" /> 15 nośników w demo
                 </span>
+              </div>
+              <div className="mt-5 rounded-xl border bg-card/80 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                      Hubert · AI doradca
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-foreground">
+                      Mateusz, szybki audyt: Twoje{" "}
+                      <span className="font-semibold text-success">ROI jest 15% powyżej średniej regionalnej</span>.
+                      Dobra robota — masz potencjał na +8% przychodu po optymalizacji renewal.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

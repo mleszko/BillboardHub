@@ -222,7 +222,7 @@ def mapping_to_db_rows(
                 user_override=False,
             )
         )
-    session.status = ImportStatus.MAPPED
+    session.status = ImportStatus.mapped
     session.llm_model = response.guessed_by_model
     session.llm_prompt_version = response.prompt_version
     return mappings
@@ -244,7 +244,7 @@ async def generate_mapping_proposal(
         owner_user_id=user_id,
         original_file_name=file_name,
         file_type=("xlsx" if file_name.lower().endswith(".xlsx") else "csv"),
-        status=ImportStatus.MAPPED,
+        status=ImportStatus.mapped,
         total_rows=int(len(df.index)),
         llm_model=guesses.guessed_by_model,
         llm_prompt_version=guesses.prompt_version,

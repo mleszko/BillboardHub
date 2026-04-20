@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import json
-
-from openai import OpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.models.models import AppMode, HubertConversation, HubertMessage
 from app.schemas.hubert import HubertRequest, HubertResponse
+from app.services.llm_gateway import chat_json_with_fallback
 
 DOMAIN_GUARDRAIL = """
 You are Hubert, a specialized advisor for BillboardHub.
@@ -38,11 +35,6 @@ def _default_demo_reply() -> str:
 
 
 class HubertService:
-    def __init__(self) -> None:
-        settings = get_settings()
-        self._settings = settings
-        self.client = OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-
     async def _persist_message(
         self,
         db: AsyncSession,
@@ -84,29 +76,19 @@ class HubertService:
             content=request.message,
         )
 
-        if not self.client:
+        try:
+            payload, _used_model = chat_json_with_fallback(
+                use_case="hubert",
+                system_prompt=(
+                    f"{DOMAIN_GUARDRAIL}\n{DEMO_STYLE_GUIDE}\n"
+                    "Always answer in Polish. Return JSON with key 'response'."
+                ),
+                user_prompt=request.message,
+                temperature=0.7,
+            )
+            reply = str(payload.get("response") or "").strip() or _default_demo_reply()
+        except Exception:  # noqa: BLE001
             reply = _default_demo_reply()
-        else:
-            try:
-                completion = self.client.chat.completions.create(
-                    model=self._settings.openai_model,
-                    temperature=0.7,
-                    response_format={"type": "json_object"},
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                f"{DOMAIN_GUARDRAIL}\n{DEMO_STYLE_GUIDE}\n"
-                                "Always answer in Polish. Return JSON with key 'response'."
-                            ),
-                        },
-                        {"role": "user", "content": request.message},
-                    ],
-                )
-                raw = completion.choices[0].message.content or '{"response": ""}'
-                reply = json.loads(raw).get("response") or _default_demo_reply()
-            except Exception:  # noqa: BLE001
-                reply = _default_demo_reply()
 
         await self._persist_message(
             db=db,

@@ -14,6 +14,32 @@ interface Msg {
   text: string;
 }
 
+interface ContractsResponse {
+  items: Array<{
+    id: string;
+    contract_number: string | null;
+    advertiser_name: string;
+    city: string | null;
+    expiry_date: string;
+    contract_status: string;
+    monthly_rent_net: number | null;
+  }>;
+}
+
+interface LiveSummary {
+  total: number;
+  expiring30: number;
+  monthlyRevenue: number;
+  occupancy: number;
+  topExpiring: { advertiser: string; ref: string | null; days: number } | null;
+}
+
+const DEV_USER_ID = "demo-user-1";
+const DEV_USER_EMAIL = "demo@billboardhub.local";
+const API_BASE_URL =
+  (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
+  "http://localhost:8000";
+
 const SCRIPTED: { match: RegExp; reply: (ctx: ReturnType<typeof stats>, name: string) => string }[] = [
   {
     match: /(roi|zwrot|zysk)/i,
@@ -58,14 +84,88 @@ function hubertReply(input: string): string {
   return `Analizuję dane portfela… Twoja sytuacja wygląda stabilnie: ${ctx.occupancy}% obłożenia, ${formatPLN(ctx.monthlyRevenue)} przychodu/mc. Doprecyzuj pytanie — interesuje Cię ROI, wygasające umowy, ceny czy strategia?`;
 }
 
+function hubertReplyFromLive(input: string, summary: LiveSummary): string {
+  if (/(wygas|expir|kończ|koniec)/i.test(input)) {
+    if (summary.topExpiring) {
+      return `Masz ${summary.expiring30} umów wygasających w ciągu 30 dni. Najpilniejsza: ${
+        summary.topExpiring.advertiser
+      } (${summary.topExpiring.ref || "brak numeru"}) — ${summary.topExpiring.days} dni.`;
+    }
+    return "W tym momencie nie masz umów wygasających w ciągu 30 dni.";
+  }
+  if (/(przych|revenue|obrót|cash|cena|price)/i.test(input)) {
+    return `Z Twoich aktualnych kontraktów wynika przychód około ${formatPLN(summary.monthlyRevenue)}/mc.`;
+  }
+  if (/(occupanc|obłoż|zaję)/i.test(input)) {
+    return `Aktualne obłożenie portfela to około ${summary.occupancy}%.`;
+  }
+  if (/(roi|zwrot|zysk)/i.test(input)) {
+    return "Na tym etapie mogę oszacować trendy z Twoich kontraktów i wygaśnięć. Jeśli chcesz, policzę prostą estymację ROI dla wybranych lokalizacji.";
+  }
+  if (!/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|roi|wygas|cena|obłoż)/i.test(input)) {
+    return OFFTOPIC_REPLY;
+  }
+  return `Widzę obecnie ${summary.total} kontraktów, ${summary.expiring30} pilnych wygaśnięć i przychód ${formatPLN(summary.monthlyRevenue)}/mc. Doprecyzuj: renewal, ceny czy priorytety na ten tydzień?`;
+}
+
 export function HubertWidget() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [liveSummary, setLiveSummary] = useState<LiveSummary | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!mounted || isDemoMode()) return;
+    let alive = true;
+    const loadContracts = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/contracts`, {
+          headers: {
+            "x-dev-user-id": DEV_USER_ID,
+            "x-dev-user-email": DEV_USER_EMAIL,
+          },
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as ContractsResponse;
+        if (!alive) return;
+        const now = Date.now();
+        const items = payload.items ?? [];
+        const withDays = items.map((item) => ({
+          ...item,
+          days: Math.ceil((new Date(item.expiry_date).getTime() - now) / (1000 * 60 * 60 * 24)),
+        }));
+        const expiring30 = withDays.filter((i) => i.days <= 30).length;
+        const topExpiring = withDays
+          .filter((i) => i.days >= 0)
+          .sort((a, b) => a.days - b.days)[0];
+        const monthlyRevenue = withDays.reduce((sum, i) => sum + (i.monthly_rent_net || 0), 0);
+        const occupancy = items.length > 0 ? 100 : 0;
+        setLiveSummary({
+          total: items.length,
+          expiring30,
+          monthlyRevenue,
+          occupancy,
+          topExpiring: topExpiring
+            ? {
+                advertiser: topExpiring.advertiser_name,
+                ref: topExpiring.contract_number,
+                days: topExpiring.days,
+              }
+            : null,
+        });
+      } catch {
+        // Keep widget usable even if contracts endpoint is unavailable.
+      }
+    };
+    void loadContracts();
+    return () => {
+      alive = false;
+    };
+  }, [mounted]);
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -83,7 +183,7 @@ export function HubertWidget() {
           role: "hubert",
           text: isDemoMode()
             ? `Cześć ${name}! Przeanalizowałem Twój portfel w Białymstoku. Twoje **ROI jest 15% powyżej średniej** — jesteś profesjonalistą! Zapytaj mnie o cokolwiek związanego ze strategią billboardową.`
-            : `Cześć! Jestem Hubert, Twój doradca ds. billboardów. Zapytaj mnie o ROI, wygasające umowy lub strategię cenową.`,
+            : `Cześć! Jestem Hubert, Twój doradca ds. billboardów. Odpowiadam na podstawie Twoich realnych kontraktów z konta.`,
         },
       ]);
     }
@@ -102,9 +202,14 @@ export function HubertWidget() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setTimeout(() => {
+      const answer = isDemoMode()
+        ? hubertReply(text)
+        : liveSummary
+        ? hubertReplyFromLive(text, liveSummary)
+        : "Ładuję Twoje dane kontraktowe. Spróbuj ponownie za kilka sekund.";
       setMessages((m) => [
         ...m,
-        { id: Date.now() + 1, role: "hubert", text: hubertReply(text) },
+        { id: Date.now() + 1, role: "hubert", text: answer },
       ]);
     }, 600);
   };

@@ -3,27 +3,34 @@ import { ArrowUpRight, AlertTriangle, Building2, TrendingUp, Percent } from "luc
 import { formatPLN, stats } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
-export function StatsHeader() {
-  const s = stats();
+type StatsHeaderData = {
+  total: number;
+  occupancy: number;
+  monthlyRevenue: number;
+  expiring30: number;
+};
+
+export function StatsHeader({ data }: { data?: StatsHeaderData }) {
+  const s = data ?? stats();
   const items = [
     {
       label: "Total Billboards",
       value: s.total.toString(),
-      delta: "+2 vs last month",
+      delta: data ? "Aktywne kontrakty" : "+2 vs last month",
       icon: Building2,
       tone: "default" as const,
     },
     {
       label: "Occupancy Rate",
       value: `${s.occupancy}%`,
-      delta: "+4 pts MoM",
+      delta: data ? "Wg stanu portfela" : "+4 pts MoM",
       icon: Percent,
       tone: "success" as const,
     },
     {
       label: "Monthly Revenue",
       value: formatPLN(s.monthlyRevenue),
-      delta: "+12% MoM",
+      delta: data ? "Suma czynszów netto" : "+12% MoM",
       icon: TrendingUp,
       tone: "success" as const,
     },

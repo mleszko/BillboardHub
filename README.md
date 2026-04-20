@@ -72,6 +72,26 @@ npm install
 npm run dev
 ```
 
+### One-command start (frontend + backend)
+
+From repo root:
+
+```bash
+npm run dev:all
+```
+
+Additional helper scripts:
+
+```bash
+npm run dev:frontend
+npm run dev:backend
+npm run dev:all:next
+```
+
+Notes:
+- `dev:all` uses the legacy Lovable/Vite frontend at `http://localhost:5173`.
+- `dev:all:next` uses the Next.js frontend from `frontend/` at `http://localhost:3000`.
+
 ## Environment Setup
 
 ### Backend (`backend/.env`)

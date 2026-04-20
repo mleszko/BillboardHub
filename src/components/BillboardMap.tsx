@@ -59,6 +59,12 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
     const bounds: L.LatLngTuple[] = [];
 
     billboards.forEach((b) => {
+      const lat = Number(b.lat);
+      const lng = Number(b.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return;
+      }
+
       const icon = L.divIcon({
         className: "",
         html: `<div class="bb-marker ${colorClass[b.status]}"></div>`,
@@ -66,7 +72,7 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
         iconAnchor: [14, 28],
       });
 
-      const marker = L.marker([b.lat, b.lng], { icon })
+      const marker = L.marker([lat, lng], { icon })
         .addTo(map)
         .on("click", () => onSelect(b));
 
@@ -76,7 +82,7 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
       );
 
       markersRef.current.set(b.id, marker);
-      bounds.push([b.lat, b.lng]);
+      bounds.push([lat, lng]);
     });
 
     if (bounds.length > 0 && !selectedId) {

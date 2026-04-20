@@ -76,8 +76,14 @@ class ImportExecuteResponse(BaseModel):
 class ContractsListItem(BaseModel):
     id: str
     contract_number: str | None
+    billboard_code: str | None = None
+    billboard_type: str | None = None
     advertiser_name: str
     city: str | None
+    location_address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    start_date: str | None = None
     expiry_date: str
     contract_status: str
     monthly_rent_net: float | None
