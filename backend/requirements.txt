@@ -12,4 +12,5 @@ openai
 supabase
 python-jose[cryptography]
 pytest
+ruff
 httpx

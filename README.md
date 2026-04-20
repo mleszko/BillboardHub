@@ -88,6 +88,20 @@ npm run dev:backend
 npm run dev:all:next
 ```
 
+Quality checks:
+
+```bash
+npm run lint
+npm run lint:backend
+npm run test:backend
+npm run check
+```
+
+Git commit hook (no push) runs automatically via Husky and executes:
+- frontend lint (`npm run lint`)
+- backend lint (`npm run lint:backend`, Ruff)
+- backend tests (`npm run test:backend`, Pytest)
+
 Notes:
 - `dev:all` uses the legacy Lovable/Vite frontend at `http://localhost:5173`.
 - `dev:all:next` uses the Next.js frontend from `frontend/` at `http://localhost:3000`.
