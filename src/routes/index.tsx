@@ -19,16 +19,16 @@ import { BetaBadge } from "@/components/BetaBadge";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "BillboardHub — Excel Killer dla zarządzania billboardami" },
+      { title: "BillboardHub — platforma operacyjna dla deweloperów budynków" },
       {
         name: "description",
         content:
-          "Profesjonalne narzędzie do śledzenia umów, wygaśnięć i przychodów z billboardów. Zen-podobny interfejs, AI-doradca Hubert, mapa nośników. Wersja demo dostępna od ręki.",
+          "Platforma do zarządzania umowami, wygaśnięciami i przychodami dla deweloperów budynków. Przejrzysty interfejs, AI-doradca Hubert i mapa lokalizacji. Wersja demo dostępna od ręki.",
       },
-      { property: "og:title", content: "BillboardHub — koniec ze spreadsheetami" },
+      { property: "og:title", content: "BillboardHub — centrum operacyjne dla deweloperów budynków" },
       {
         property: "og:description",
-        content: "Centralny rejestr umów, alerty wygaśnięcia, mapa OOH i AI-doradca. Demo bez logowania.",
+        content: "Centralny rejestr umów, alerty wygaśnięć, mapa lokalizacji i AI-doradca. Demo bez logowania.",
       },
     ],
   }),
@@ -85,14 +85,14 @@ function LandingPage() {
                 Wersja 2 · darmowa w okresie beta
               </div>
               <h1 className="mt-5 text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
-                Excel Killer dla branży{" "}
+                Centrum operacyjne dla{" "}
                 <span className="bg-gradient-to-r from-primary to-[oklch(0.5_0.16_280)] bg-clip-text text-transparent">
-                  outdoor advertising
+                  deweloperów budynków
                 </span>
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
-                Centralny rejestr umów, alerty wygaśnięcia, mapa nośników i AI-doradca <strong>Hubert</strong>.
-                Zen-podobny interfejs, który przejrzysz w 3 minuty — koniec z 47 zakładkami w arkuszu.
+                Centralny rejestr umów, alerty wygaśnięć, mapa lokalizacji i AI-doradca <strong>Hubert</strong>.
+                Jeden panel dla zespołu komercjalizacji — bez chaosu i dziesiątek zakładek w arkuszu.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button onClick={tryDemo} size="lg" className="gap-2 px-6">
