@@ -117,6 +117,18 @@ type MappingProposalResponse = {
   parse_options?: Record<string, unknown> | null;
 };
 
+type SheetMappingProposalItem = {
+  sheet_name: string;
+  proposal: MappingProposalResponse;
+};
+
+type MappingProposalBatchResponse = {
+  file_name: string;
+  owner_user_id: string;
+  sheets: SheetMappingProposalItem[];
+  total_rows: number;
+};
+
 type ImportExecuteResponse = {
   session_id: string;
   status: string;
@@ -124,6 +136,21 @@ type ImportExecuteResponse = {
   valid_rows: number;
   invalid_rows: number;
   imported_rows: number;
+};
+
+type SheetImportExecuteItem = {
+  sheet_name: string;
+  result: ImportExecuteResponse;
+};
+
+type ImportExecuteBatchResponse = {
+  owner_user_id: string;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+  imported_rows: number;
+  sheets: SheetImportExecuteItem[];
+  errors_preview: unknown[];
 };
 
 const API_BASE_URL =
@@ -136,7 +163,10 @@ function ImportPage() {
   const fileRef = useRef<File | null>(null);
   const [stage, setStage] = useState<Stage>("upload");
   const [proposal, setProposal] = useState<MappingProposalResponse | null>(null);
+  const [batchProposals, setBatchProposals] = useState<SheetMappingProposalItem[]>([]);
+  const [activeSheetName, setActiveSheetName] = useState<string>("");
   const [mapping, setMapping] = useState<MappingRow[]>([]);
+  const [mappingsBySheet, setMappingsBySheet] = useState<Record<string, MappingRow[]>>({});
   const [result, setResult] = useState<ImportExecuteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -155,6 +185,12 @@ function ImportPage() {
     Record<string, Record<string, string | null>>
   >({});
 
+  const isBatchMode = batchProposals.length > 0;
+  const activeMapping = useMemo(
+    () => (isBatchMode ? (mappingsBySheet[activeSheetName] ?? []) : mapping),
+    [isBatchMode, mappingsBySheet, activeSheetName, mapping],
+  );
+
   useEffect(() => {
     void (async () => {
       try {
@@ -171,19 +207,26 @@ function ImportPage() {
     })();
   }, []);
 
-  const requiredTargetsMissing = useMemo(() => {
-    const selected = new Set(mapping.map((item) => item.target_field_name).filter(Boolean));
+  const hasMissingRequiredTargets = (rows: MappingRow[]) => {
+    const selected = new Set(rows.map((item) => item.target_field_name).filter(Boolean));
     const hasParty = selected.has("advertiser_name") || selected.has("property_owner_name");
     return !hasParty;
-  }, [mapping]);
+  };
+
+  const requiredTargetsMissing = useMemo(() => {
+    if (!isBatchMode) return hasMissingRequiredTargets(mapping);
+    return batchProposals.some((sheet) =>
+      hasMissingRequiredTargets(mappingsBySheet[sheet.sheet_name] ?? []),
+    );
+  }, [isBatchMode, mapping, batchProposals, mappingsBySheet]);
 
   const hasBlockedLpContractMapping = useMemo(
     () =>
-      mapping.some(
+      activeMapping.some(
         (item) =>
           item.target_field_name === "contract_number" && isLpLikeHeader(item.source_column_name),
       ),
-    [mapping],
+    [activeMapping],
   );
 
   const applyTemplate = (id: string) => {
@@ -248,25 +291,40 @@ function ImportPage() {
       formData.append("unpivot_month_columns", unpivotMonths ? "true" : "false");
       formData.append("monthly_aggregate", monthlyAggregate);
 
-      const response = await fetch(`${API_BASE_URL}/imports/guess-mapping`, {
-        method: "POST",
-        headers: await getBackendAuthHeaders(),
-        body: formData,
-      });
+      const useBatchEndpoint = !isCsv && selectedSheets.length > 1;
+      const response = await fetch(
+        `${API_BASE_URL}/imports/${useBatchEndpoint ? "guess-mapping-batch" : "guess-mapping"}`,
+        {
+          method: "POST",
+          headers: await getBackendAuthHeaders(),
+          body: formData,
+        },
+      );
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || "Nie udało się odczytać i zmapować pliku.");
       }
-      const data = (await response.json()) as MappingProposalResponse;
-      setProposal(data);
-      setMapping(data.mapping_suggestions);
+      if (useBatchEndpoint) {
+        const data = (await response.json()) as MappingProposalBatchResponse;
+        setBatchProposals(data.sheets);
+        const initial = data.sheets[0];
+        setActiveSheetName(initial?.sheet_name ?? "");
+        const mappingMap: Record<string, MappingRow[]> = {};
+        data.sheets.forEach((sheet) => {
+          mappingMap[sheet.sheet_name] = sheet.proposal.mapping_suggestions;
+        });
+        setMappingsBySheet(mappingMap);
+        setProposal(initial?.proposal ?? null);
+        setMapping(initial?.proposal.mapping_suggestions ?? []);
+      } else {
+        const data = (await response.json()) as MappingProposalResponse;
+        setProposal(data);
+        setMapping(data.mapping_suggestions);
+        setBatchProposals([]);
+        setMappingsBySheet({});
+        setActiveSheetName("");
+      }
       setStage("mapping");
-      if (data.warning) {
-        toast.warning(data.warning);
-      }
-      if (data.parse_options?.unpivot_applied) {
-        toast.message("Złączono kolumny miesięczne w jeden wiersz na umowę.");
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload nie powiódł się.");
       setStage("configure");
@@ -276,10 +334,18 @@ function ImportPage() {
   };
 
   const updateMapping = (i: number, value: string) => {
+    const newTarget = value === "ignore" ? null : value;
+    if (isBatchMode) {
+      setMappingsBySheet((prev) => ({
+        ...prev,
+        [activeSheetName]: (prev[activeSheetName] ?? []).map((row, idx) =>
+          idx === i ? { ...row, target_field_name: newTarget } : row,
+        ),
+      }));
+      return;
+    }
     setMapping((rows) =>
-      rows.map((row, idx) =>
-        idx === i ? { ...row, target_field_name: value === "ignore" ? null : value } : row,
-      ),
+      rows.map((row, idx) => (idx === i ? { ...row, target_field_name: newTarget } : row)),
     );
   };
 
@@ -298,49 +364,80 @@ function ImportPage() {
     setError(null);
     setIsBusy(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/imports/confirm-mapping`, {
+      const endpoint = isBatchMode ? "confirm-mapping-batch" : "confirm-mapping";
+      const body = isBatchMode
+        ? {
+            owner_user_id: user?.id ?? proposal.owner_user_id,
+            sheets: batchProposals.map((sheet) => ({
+              sheet_name: sheet.sheet_name,
+              session_id: sheet.proposal.session_id,
+              mapping: (mappingsBySheet[sheet.sheet_name] ?? []).map((item) => ({
+                source_column_name: item.source_column_name,
+                target_field_name: item.target_field_name,
+                confirmed_by_user: true,
+                user_override: true,
+                transform_hint: item.transform_hint ?? null,
+              })),
+              sheet_overrides: [],
+            })),
+          }
+        : {
+            session_id: proposal.session_id,
+            owner_user_id: user?.id ?? proposal.owner_user_id,
+            mapping: mapping.map((item) => ({
+              source_column_name: item.source_column_name,
+              target_field_name: item.target_field_name,
+              confirmed_by_user: true,
+              user_override: true,
+              transform_hint: item.transform_hint ?? null,
+            })),
+            sheet_overrides: Object.entries(sheetOverrides).map(([sheet_name, overrides]) => ({
+              sheet_name,
+              mapping: mapping.map((item) => ({
+                source_column_name: item.source_column_name,
+                target_field_name: Object.prototype.hasOwnProperty.call(
+                  overrides,
+                  item.source_column_name,
+                )
+                  ? overrides[item.source_column_name]
+                  : item.target_field_name,
+                confirmed_by_user: true,
+                user_override: Object.prototype.hasOwnProperty.call(
+                  overrides,
+                  item.source_column_name,
+                ),
+                transform_hint: item.transform_hint ?? null,
+              })),
+            })),
+          };
+
+      const response = await fetch(`${API_BASE_URL}/imports/${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(await getBackendAuthHeaders()),
         },
-        body: JSON.stringify({
-          session_id: proposal.session_id,
-          owner_user_id: user?.id ?? proposal.owner_user_id,
-          mapping: mapping.map((item) => ({
-            source_column_name: item.source_column_name,
-            target_field_name: item.target_field_name,
-            confirmed_by_user: true,
-            user_override: true,
-            transform_hint: item.transform_hint ?? null,
-          })),
-          sheet_overrides: Object.entries(sheetOverrides).map(([sheet_name, overrides]) => ({
-            sheet_name,
-            mapping: mapping.map((item) => ({
-              source_column_name: item.source_column_name,
-              target_field_name: Object.prototype.hasOwnProperty.call(
-                overrides,
-                item.source_column_name,
-              )
-                ? overrides[item.source_column_name]
-                : item.target_field_name,
-              confirmed_by_user: true,
-              user_override: Object.prototype.hasOwnProperty.call(
-                overrides,
-                item.source_column_name,
-              ),
-              transform_hint: item.transform_hint ?? null,
-            })),
-          })),
-        }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || "Potwierdzenie mapowania nie powiodło się.");
       }
-      const data = (await response.json()) as ImportExecuteResponse;
-      setResult(data);
-      toast.success(`Zaimportowano ${data.imported_rows} rekordów.`);
+      const data = isBatchMode
+        ? ((await response.json()) as ImportExecuteBatchResponse)
+        : ((await response.json()) as ImportExecuteResponse);
+      const finalResult: ImportExecuteResponse = isBatchMode
+        ? {
+            session_id: "batch",
+            status: "completed",
+            total_rows: data.total_rows,
+            valid_rows: data.valid_rows,
+            invalid_rows: data.invalid_rows,
+            imported_rows: data.imported_rows,
+          }
+        : (data as ImportExecuteResponse);
+      setResult(finalResult);
+      toast.success(`Zaimportowano ${finalResult.imported_rows} rekordów.`);
       await navigate({ to: "/app" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import nie powiódł się.");
@@ -353,7 +450,10 @@ function ImportPage() {
     fileRef.current = null;
     setStage("upload");
     setProposal(null);
+    setBatchProposals([]);
+    setActiveSheetName("");
     setMapping([]);
+    setMappingsBySheet({});
     setResult(null);
     setError(null);
     setIsBusy(false);
@@ -646,9 +746,12 @@ function ImportPage() {
                 <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-info" />
                 <div className="flex-1 text-sm">
                   <div className="font-medium">
-                    Wykryto {mapping.length} kolumn w pliku{" "}
+                    Wykryto {activeMapping.length} kolumn w pliku{" "}
                     <span className="font-mono text-xs">{proposal?.file_name}</span> ·{" "}
-                    {proposal?.total_rows ?? 0} wierszy
+                    {isBatchMode
+                      ? batchProposals.reduce((acc, s) => acc + s.proposal.total_rows, 0)
+                      : (proposal?.total_rows ?? 0)}{" "}
+                    wierszy
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     Sprawdź mapowanie. Przy <code>IMPORT_USE_LLM=false</code> używane są tylko
@@ -666,7 +769,7 @@ function ImportPage() {
                   <div className="col-span-1 text-right">%</div>
                 </div>
                 <div className="divide-y">
-                  {mapping.map((c, i) => (
+                  {activeMapping.map((c, i) => (
                     <div
                       key={c.source_column_name}
                       className="grid grid-cols-12 items-center gap-2 px-3 py-2.5"
@@ -714,7 +817,7 @@ function ImportPage() {
                 </div>
               </div>
 
-              {!isCsv && selectedSheets.length > 1 && (
+              {!isCsv && selectedSheets.length > 1 && !isBatchMode && (
                 <div className="space-y-3 rounded-lg border p-4">
                   <div className="text-sm font-medium">
                     Override mapowania per zakładka (opcjonalne)
@@ -770,6 +873,28 @@ function ImportPage() {
                 </div>
               )}
 
+              {isBatchMode && (
+                <div className="space-y-2 rounded-lg border p-4">
+                  <div className="text-sm font-medium">Mapowanie per zakładka</div>
+                  <div className="flex flex-wrap gap-2">
+                    {batchProposals.map((sheet) => (
+                      <Button
+                        key={sheet.sheet_name}
+                        type="button"
+                        size="sm"
+                        variant={activeSheetName === sheet.sheet_name ? "default" : "outline"}
+                        onClick={() => {
+                          setActiveSheetName(sheet.sheet_name);
+                          setProposal(sheet.proposal);
+                        }}
+                      >
+                        {sheet.sheet_name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
                 <Button variant="ghost" onClick={() => setStage("configure")}>
                   Wróć do ustawień arkusza
@@ -807,7 +932,10 @@ function ImportPage() {
                 <div className="flex-1 text-sm">
                   <div className="font-medium">Gotowy do importu</div>
                   <div className="text-xs text-muted-foreground">
-                    Sesja: <span className="font-mono">{proposal?.session_id}</span>
+                    Sesja:{" "}
+                    <span className="font-mono">
+                      {isBatchMode ? "batch" : proposal?.session_id}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -824,7 +952,7 @@ function ImportPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {mapping.slice(0, 12).map((row) => (
+                    {activeMapping.slice(0, 12).map((row) => (
                       <tr key={row.source_column_name}>
                         <td className="px-3 py-2 font-mono text-[11px] font-semibold">
                           {row.source_column_name}

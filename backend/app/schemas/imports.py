@@ -73,6 +73,18 @@ class ImportMappingProposalResponse(BaseModel):
     parse_options: dict[str, object] | None = None
 
 
+class SheetMappingProposalItem(BaseModel):
+    sheet_name: str
+    proposal: ImportMappingProposalResponse
+
+
+class ImportMappingProposalBatchResponse(BaseModel):
+    file_name: str
+    owner_user_id: str
+    sheets: list[SheetMappingProposalItem]
+    total_rows: int
+
+
 class MappingConfirmationItem(BaseModel):
     source_column_name: str
     target_field_name: str | None = None
@@ -93,6 +105,18 @@ class ImportMappingConfirmationRequest(BaseModel):
     sheet_overrides: list[SheetMappingOverride] = []
 
 
+class SheetImportMappingConfirmationRequest(BaseModel):
+    sheet_name: str
+    session_id: str
+    mapping: list[MappingConfirmationItem]
+    sheet_overrides: list[SheetMappingOverride] = []
+
+
+class ImportMappingConfirmationBatchRequest(BaseModel):
+    owner_user_id: str
+    sheets: list[SheetImportMappingConfirmationRequest]
+
+
 class ImportExecuteResponse(BaseModel):
     session_id: str
     status: str
@@ -100,6 +124,21 @@ class ImportExecuteResponse(BaseModel):
     valid_rows: int
     invalid_rows: int
     imported_rows: int
+    errors_preview: list[dict]
+
+
+class SheetImportExecuteItem(BaseModel):
+    sheet_name: str
+    result: ImportExecuteResponse
+
+
+class ImportExecuteBatchResponse(BaseModel):
+    owner_user_id: str
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    imported_rows: int
+    sheets: list[SheetImportExecuteItem]
     errors_preview: list[dict]
 
 

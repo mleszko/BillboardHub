@@ -14,13 +14,18 @@ from app.core.database import get_db
 from app.models.models import Contract, ImportColumnMapping, ImportSession, ImportStatus
 from app.schemas.imports import (
     CANONICAL_FIELDS,
+    ImportExecuteBatchResponse,
     ImportExecuteResponse,
+    ImportMappingConfirmationBatchRequest,
     ImportInspectResponse,
     ImportInspectSheet,
     ImportMappingConfirmationRequest,
+    ImportMappingProposalBatchResponse,
     ImportMappingProposalResponse,
     ImportTemplatePreset,
     MappingProposal,
+    SheetImportExecuteItem,
+    SheetMappingProposalItem,
     REQUIRED_IMPORT_FIELDS,
 )
 from app.services.import_excel import collapse_wide_month_columns, list_excel_sheet_info, read_tabular_dataframe
@@ -410,6 +415,60 @@ async def guess_mapping(
         ) from exc
 
 
+@router.post("/guess-mapping-batch", response_model=ImportMappingProposalBatchResponse)
+async def guess_mapping_batch(
+    file: UploadFile = File(...),
+    sheet_name: str = Form(""),
+    sheet_names: list[str] = Form([]),
+    header_row_1based: int = Form(0),
+    skip_rows_before_header: int = Form(0),
+    unpivot_month_columns: str = Form("false"),
+    monthly_aggregate: str = Form("mean"),
+    user: UserContext = Depends(ensure_profile),
+    db: AsyncSession = Depends(get_db),
+) -> ImportMappingProposalBatchResponse:
+    try:
+        normalized = _normalize_sheet_names(sheet_name, sheet_names)
+        if not normalized:
+            normalized = [sheet_name.strip()] if sheet_name.strip() else []
+        if not normalized:
+            normalized = [""]
+
+        all_items: list[SheetMappingProposalItem] = []
+        total_rows = 0
+        for single_sheet in normalized:
+            proposal = await generate_mapping_proposal(
+                db=db,
+                user_id=user.user_id,
+                file=UploadFile(
+                    file=io.BytesIO(await file.read()),
+                    filename=file.filename,
+                    headers=file.headers,
+                ),
+                sheet_name=single_sheet,
+                sheet_names=[single_sheet] if single_sheet else [],
+                header_row_1based=header_row_1based,
+                skip_rows_before_header=skip_rows_before_header,
+                unpivot_month_columns=_form_bool(unpivot_month_columns),
+                monthly_aggregate=monthly_aggregate,
+            )
+            total_rows += proposal.total_rows
+            all_items.append(SheetMappingProposalItem(sheet_name=single_sheet or "0", proposal=proposal))
+            await file.seek(0)
+
+        return ImportMappingProposalBatchResponse(
+            file_name=file.filename or "uploaded-file",
+            owner_user_id=user.user_id,
+            sheets=all_items,
+            total_rows=total_rows,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
 @router.post("/confirm-mapping", response_model=ImportExecuteResponse)
 async def confirm_mapping(
     payload: ImportMappingConfirmationRequest,
@@ -429,3 +488,51 @@ async def confirm_mapping(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+@router.post("/confirm-mapping-batch", response_model=ImportExecuteBatchResponse)
+async def confirm_mapping_batch(
+    payload: ImportMappingConfirmationBatchRequest,
+    user: UserContext = Depends(ensure_profile),
+    db: AsyncSession = Depends(get_db),
+) -> ImportExecuteBatchResponse:
+    if payload.owner_user_id != user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only confirm your own import sessions.",
+        )
+
+    results: list[SheetImportExecuteItem] = []
+    total_rows = 0
+    valid_rows = 0
+    invalid_rows = 0
+    imported_rows = 0
+    errors_preview: list[dict[str, Any]] = []
+
+    for sheet_payload in payload.sheets:
+        single_request = ImportMappingConfirmationRequest(
+            session_id=sheet_payload.session_id,
+            owner_user_id=payload.owner_user_id,
+            mapping=sheet_payload.mapping,
+            sheet_overrides=sheet_payload.sheet_overrides,
+        )
+        try:
+            result = await confirm_mapping_and_import(db=db, payload=single_request)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        total_rows += result.total_rows
+        valid_rows += result.valid_rows
+        invalid_rows += result.invalid_rows
+        imported_rows += result.imported_rows
+        errors_preview.extend(result.errors_preview or [])
+        results.append(SheetImportExecuteItem(sheet_name=sheet_payload.sheet_name, result=result))
+
+    return ImportExecuteBatchResponse(
+        owner_user_id=payload.owner_user_id,
+        total_rows=total_rows,
+        valid_rows=valid_rows,
+        invalid_rows=invalid_rows,
+        imported_rows=imported_rows,
+        sheets=results,
+        errors_preview=errors_preview[:10],
+    )
