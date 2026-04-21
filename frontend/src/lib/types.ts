@@ -25,6 +25,8 @@ export type CustomContractColumn = {
   updated_at: string;
 };
 
+export type ContractCustomColumn = CustomContractColumn;
+
 export type ContractCustomValue = {
   status: "pending" | "computed" | "failed" | string;
   value_text: string | null;
