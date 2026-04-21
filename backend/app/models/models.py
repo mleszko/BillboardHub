@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +51,17 @@ class ImportRowStatus(str, Enum):
 class AppMode(str, Enum):
     auth = "auth"
     demo = "demo"
+
+
+class CustomColumnOutputType(str, Enum):
+    text = "text"
+    number = "number"
+
+
+class CustomColumnValueStatus(str, Enum):
+    pending = "pending"
+    computed = "computed"
+    failed = "failed"
 
 
 class Profile(Base):
@@ -100,6 +111,56 @@ class Contract(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+    custom_values: Mapped[list["ContractCustomValue"]] = relationship(
+        back_populates="contract", cascade="all, delete-orphan"
+    )
+
+
+class ContractCustomColumn(Base):
+    __tablename__ = "contract_custom_columns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
+    output_type: Mapped[CustomColumnOutputType] = mapped_column(
+        SQLEnum(CustomColumnOutputType), default=CustomColumnOutputType.text, nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+    values: Mapped[list["ContractCustomValue"]] = relationship(
+        back_populates="column", cascade="all, delete-orphan"
+    )
+
+
+class ContractCustomValue(Base):
+    __tablename__ = "contract_custom_values"
+    __table_args__ = (UniqueConstraint("contract_id", "column_id", name="uq_contract_custom_value"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    contract_id: Mapped[str] = mapped_column(ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    column_id: Mapped[str] = mapped_column(
+        ForeignKey("contract_custom_columns.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    value_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_number: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
+    value_json: Mapped[dict[str, Any] | None] = mapped_column(SQLiteJSON, nullable=True)
+    status: Mapped[CustomColumnValueStatus] = mapped_column(
+        SQLEnum(CustomColumnValueStatus), default=CustomColumnValueStatus.pending, nullable=False
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    contract: Mapped[Contract] = relationship(back_populates="custom_values")
+    column: Mapped[ContractCustomColumn] = relationship(back_populates="values")
 
 
 class ImportSession(Base):

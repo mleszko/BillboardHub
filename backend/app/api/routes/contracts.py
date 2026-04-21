@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
 from app.core.auth import UserContext, ensure_profile
 from app.core.database import get_db
-from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
-from app.models.models import Contract, ContractStatus
+from app.models.models import Contract, ContractCustomColumn, ContractCustomValue, ContractStatus
 from app.schemas.contracts_write import ContractCreateBody, ContractUpdateBody
-from app.schemas.imports import ContractsListItem, ContractsListResponse
+from app.schemas.imports import ContractCustomColumnItem, ContractCustomValueItem, ContractsListResponse
 from app.services.import_processor import _coerce_billboard_type
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
@@ -22,30 +22,30 @@ def _decimal_to_float(value: Decimal | None) -> float | None:
     return float(value)
 
 
-def _contract_to_list_item(contract: Contract) -> ContractsListItem:
-    return ContractsListItem(
-        id=contract.id,
-        contract_number=contract.contract_number,
-        billboard_code=contract.billboard_code,
-        billboard_type=contract.billboard_type.value if contract.billboard_type else None,
-        advertiser_name=contract.advertiser_name,
-        property_owner_name=contract.property_owner_name,
-        city=contract.city,
-        location_address=contract.location_address,
-        latitude=float(contract.latitude) if contract.latitude is not None else None,
-        longitude=float(contract.longitude) if contract.longitude is not None else None,
-        surface_size=contract.surface_size,
-        start_date=contract.start_date.isoformat() if contract.start_date else None,
-        expiry_date=contract.expiry_date.isoformat(),
-        expiry_unknown=contract.expiry_date == PLACEHOLDER_CONTRACT_EXPIRY,
-        contract_status=contract.contract_status.value,
-        monthly_rent_net=_decimal_to_float(contract.monthly_rent_net),
-        total_contract_value_net=_decimal_to_float(contract.total_contract_value_net),
-        contact_person=contract.contact_person,
-        contact_phone=contract.contact_phone,
-        contact_email=contract.contact_email,
-        notes=contract.notes,
-    )
+def _contract_to_dict(contract: Contract) -> dict[str, object | None]:
+    return {
+        "id": contract.id,
+        "contract_number": contract.contract_number,
+        "billboard_code": contract.billboard_code,
+        "billboard_type": contract.billboard_type.value if contract.billboard_type else None,
+        "advertiser_name": contract.advertiser_name,
+        "property_owner_name": contract.property_owner_name,
+        "city": contract.city,
+        "location_address": contract.location_address,
+        "latitude": float(contract.latitude) if contract.latitude is not None else None,
+        "longitude": float(contract.longitude) if contract.longitude is not None else None,
+        "surface_size": contract.surface_size,
+        "start_date": contract.start_date.isoformat() if contract.start_date else None,
+        "expiry_date": contract.expiry_date.isoformat(),
+        "expiry_unknown": contract.expiry_date == PLACEHOLDER_CONTRACT_EXPIRY,
+        "contract_status": contract.contract_status.value,
+        "monthly_rent_net": _decimal_to_float(contract.monthly_rent_net),
+        "total_contract_value_net": _decimal_to_float(contract.total_contract_value_net),
+        "contact_person": contract.contact_person,
+        "contact_phone": contract.contact_phone,
+        "contact_email": contract.contact_email,
+        "notes": contract.notes,
+    }
 
 
 def _resolve_create_expiry(body: ContractCreateBody) -> date:
@@ -69,22 +69,72 @@ async def list_contracts(
     user: UserContext = Depends(ensure_profile),
     db: AsyncSession = Depends(get_db),
 ) -> ContractsListResponse:
-    result = await db.execute(
+    contracts_result = await db.execute(
         select(Contract)
         .where(Contract.owner_user_id == user.user_id)
         .order_by(Contract.expiry_date.asc())
         .limit(500)
     )
-    contracts = result.scalars().all()
-    return ContractsListResponse(items=[_contract_to_list_item(c) for c in contracts])
+    contracts = contracts_result.scalars().all()
+
+    columns_result = await db.execute(
+        select(ContractCustomColumn)
+        .where(
+            ContractCustomColumn.owner_user_id == user.user_id,
+            ContractCustomColumn.is_active.is_(True),
+        )
+        .order_by(ContractCustomColumn.created_at.asc())
+    )
+    custom_columns = columns_result.scalars().all()
+
+    values_result = await db.execute(
+        select(ContractCustomValue).where(
+            ContractCustomValue.owner_user_id == user.user_id,
+        )
+    )
+    values = values_result.scalars().all()
+    values_by_contract: dict[str, dict[str, ContractCustomValue]] = {}
+    for value in values:
+        values_by_contract.setdefault(value.contract_id, {})[value.column_id] = value
+
+    return ContractsListResponse(
+        custom_columns=[
+            ContractCustomColumnItem(
+                id=column.id,
+                name=column.name,
+                prompt_template=column.prompt_template,
+                output_type=column.output_type.value,
+                is_active=column.is_active,
+                created_at=column.created_at.isoformat(),
+                updated_at=column.updated_at.isoformat(),
+            )
+            for column in custom_columns
+        ],
+        items=[
+            {
+                **_contract_to_dict(contract),
+                "custom_values": {
+                    column_id: ContractCustomValueItem(
+                        status=stored_value.status.value,
+                        value_text=stored_value.value_text,
+                        value_number=_decimal_to_float(stored_value.value_number),
+                        error_message=stored_value.error_message,
+                        computed_at=stored_value.computed_at.isoformat() if stored_value.computed_at else None,
+                    )
+                    for column_id, stored_value in values_by_contract.get(contract.id, {}).items()
+                },
+            }
+            for contract in contracts
+        ],
+    )
 
 
-@router.post("", response_model=ContractsListItem, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_contract(
     body: ContractCreateBody,
     user: UserContext = Depends(ensure_profile),
     db: AsyncSession = Depends(get_db),
-) -> ContractsListItem:
+) -> dict[str, object | None]:
     expiry = _resolve_create_expiry(body)
     contract = Contract(
         owner_user_id=user.user_id,
@@ -103,16 +153,16 @@ async def create_contract(
     db.add(contract)
     await db.commit()
     await db.refresh(contract)
-    return _contract_to_list_item(contract)
+    return _contract_to_dict(contract)
 
 
-@router.patch("/{contract_id}", response_model=ContractsListItem)
+@router.patch("/{contract_id}")
 async def update_contract(
     contract_id: str,
     body: ContractUpdateBody,
     user: UserContext = Depends(ensure_profile),
     db: AsyncSession = Depends(get_db),
-) -> ContractsListItem:
+) -> dict[str, object | None]:
     result = await db.execute(
         select(Contract).where(
             Contract.id == contract_id,
@@ -158,7 +208,7 @@ async def update_contract(
 
     await db.commit()
     await db.refresh(contract)
-    return _contract_to_list_item(contract)
+    return _contract_to_dict(contract)
 
 
 @router.delete("/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)

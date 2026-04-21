@@ -7,10 +7,39 @@ export type ContractRow = {
   expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
+  custom_values: Record<string, ContractCustomValue>;
 };
 
 export type ContractsListResponse = {
   items: ContractRow[];
+  custom_columns: CustomContractColumn[];
+};
+
+export type CustomContractColumn = {
+  id: string;
+  name: string;
+  prompt_template: string;
+  output_type: "text" | "number" | string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContractCustomColumn = CustomContractColumn;
+
+export type ContractCustomValue = {
+  status: "pending" | "computed" | "failed" | string;
+  value_text: string | null;
+  value_number: number | null;
+  error_message: string | null;
+  computed_at: string | null;
+};
+
+export type CreateCustomContractColumnRequest = {
+  owner_user_id: string;
+  name: string;
+  prompt_template: string;
+  output_type: "text" | "number";
 };
 
 export type HeaderMappingSuggestion = {
