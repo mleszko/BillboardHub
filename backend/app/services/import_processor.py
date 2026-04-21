@@ -18,6 +18,7 @@ from app.services.import_guesser import parse_date, parse_decimal
 from app.services.llm_gateway import chat_json_with_fallback
 
 MISSING_ADVERTISER_PLACEHOLDER = "DO_UZUPELNIENIA"
+LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
@@ -71,6 +72,23 @@ def _clean_party_field(value: Any) -> Any:
             return None
         return s
     return value
+
+
+def _is_lp_like_column(source_column_name: str) -> bool:
+    normalized = (
+        source_column_name.strip().lower().replace(".", "").replace("_", " ").replace("-", " ")
+    )
+    compact = normalized.replace(" ", "")
+    return normalized in LP_COLUMN_TOKENS or compact in LP_COLUMN_TOKENS
+
+
+def _sanitize_mapping_dict(mapping: dict[str, str]) -> dict[str, str]:
+    sanitized: dict[str, str] = {}
+    for source_column_name, target_field_name in mapping.items():
+        if target_field_name == "contract_number" and _is_lp_like_column(source_column_name):
+            continue
+        sanitized[source_column_name] = target_field_name
+    return sanitized
 
 
 def _coerce_billboard_type(raw: Any) -> BillboardType:
@@ -211,11 +229,13 @@ async def confirm_mapping_and_import(
 
     await db.execute(delete(ImportRow).where(ImportRow.import_session_id == payload.session_id))
 
-    mapped_columns = {
-        item.source_column_name: item.target_field_name
-        for item in payload.mapping
-        if item.target_field_name and item.confirmed_by_user
-    }
+    mapped_columns = _sanitize_mapping_dict(
+        {
+            item.source_column_name: item.target_field_name
+            for item in payload.mapping
+            if item.target_field_name and item.confirmed_by_user
+        }
+    )
     transform_hints = {item.source_column_name: item.transform_hint for item in payload.mapping if item.transform_hint}
     sheet_mapped_columns: dict[str, dict[str, str]] = {}
     sheet_transform_hints: dict[str, dict[str, str]] = {}
@@ -223,11 +243,13 @@ async def confirm_mapping_and_import(
         normalized_name = override.sheet_name.strip()
         if not normalized_name:
             continue
-        sheet_mapped_columns[normalized_name] = {
-            item.source_column_name: item.target_field_name
-            for item in override.mapping
-            if item.target_field_name and item.confirmed_by_user
-        }
+        sheet_mapped_columns[normalized_name] = _sanitize_mapping_dict(
+            {
+                item.source_column_name: item.target_field_name
+                for item in override.mapping
+                if item.target_field_name and item.confirmed_by_user
+            }
+        )
         sheet_transform_hints[normalized_name] = {
             item.source_column_name: item.transform_hint for item in override.mapping if item.transform_hint
         }

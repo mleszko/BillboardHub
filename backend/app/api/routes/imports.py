@@ -33,12 +33,40 @@ from app.services.llm_gateway import chat_json_with_fallback
 router = APIRouter(prefix="/imports", tags=["imports"])
 
 PROMPT_VERSION = "v1"
+LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})
 
 
 def _to_json_safe_records(df: pd.DataFrame, limit: int | None = None) -> list[dict[str, Any]]:
     safe_df = df.head(limit) if limit is not None else df
     records = safe_df.where(pd.notna(safe_df), None).to_dict(orient="records")
     return json.loads(json.dumps(records, default=str))
+
+
+def _is_lp_like_column(source_column_name: str) -> bool:
+    normalized = (
+        source_column_name.strip().lower().replace(".", "").replace("_", " ").replace("-", " ")
+    )
+    compact = normalized.replace(" ", "")
+    return normalized in LP_COLUMN_TOKENS or compact in LP_COLUMN_TOKENS
+
+
+def _sanitize_lp_contract_number_mapping(proposals: list[MappingProposal]) -> list[MappingProposal]:
+    sanitized: list[MappingProposal] = []
+    for proposal in proposals:
+        if proposal.target_field_name == "contract_number" and _is_lp_like_column(proposal.source_column_name):
+            sanitized.append(
+                proposal.model_copy(
+                    update={
+                        "target_field_name": None,
+                        "guessed_confidence": 0.0,
+                        "guessed_rationale": "Blocked: l.p./lp cannot map to contract_number.",
+                        "is_required_target": False,
+                    }
+                )
+            )
+            continue
+        sanitized.append(proposal)
+    return sanitized
 
 
 def _normalize_sheet_names(sheet_name: str, sheet_names: list[str] | None) -> list[str]:
@@ -147,7 +175,7 @@ def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[st
     settings = get_settings()
     if not settings.import_use_llm:
         proposals = heuristic_mapping_proposals(source_columns)
-        return proposals, "local-heuristics", "IMPORT_USE_LLM=false — użyto wyłącznie lokalnych heurystyk (bez wysyłki próbek do modelu)."
+        return _sanitize_lp_contract_number_mapping(proposals), "local-heuristics", "IMPORT_USE_LLM=false — użyto wyłącznie lokalnych heurystyk (bez wysyłki próbek do modelu)."
 
     fallback = _fallback_proposals(source_columns)
     contract_fields = _contract_model_fields()
@@ -163,9 +191,9 @@ def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[st
         proposals = [_proposal_from_llm_item(item) for item in parsed.get("proposals", [])]
         if not proposals:
             return fallback, used_model, "Model returned empty proposals, fallback used."
-        return proposals, used_model, None
+        return _sanitize_lp_contract_number_mapping(proposals), used_model, None
     except Exception as exc:  # noqa: BLE001
-        return fallback, "heuristic-fallback", f"LLM mapping failed, fallback used: {exc}"
+        return _sanitize_lp_contract_number_mapping(fallback), "heuristic-fallback", f"LLM mapping failed, fallback used: {exc}"
 
 
 async def generate_mapping_proposal(

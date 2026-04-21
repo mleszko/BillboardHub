@@ -81,6 +81,12 @@ type MappingRow = {
   transform_hint: string | null;
 };
 
+function isLpLikeHeader(header: string): boolean {
+  const normalized = header.trim().toLowerCase().replace(/[._-]/g, " ");
+  const compact = normalized.replace(/\s+/g, "");
+  return normalized === "l p" || compact === "lp";
+}
+
 type InspectSheet = {
   name: string;
   row_count: number;
@@ -170,6 +176,15 @@ function ImportPage() {
     const hasParty = selected.has("advertiser_name") || selected.has("property_owner_name");
     return !hasParty;
   }, [mapping]);
+
+  const hasBlockedLpContractMapping = useMemo(
+    () =>
+      mapping.some(
+        (item) =>
+          item.target_field_name === "contract_number" && isLpLikeHeader(item.source_column_name),
+      ),
+    [mapping],
+  );
 
   const applyTemplate = (id: string) => {
     const t = templates.find((x) => x.id === id);
@@ -761,7 +776,7 @@ function ImportPage() {
                 </Button>
                 <Button
                   className="gap-2"
-                  disabled={requiredTargetsMissing || isBusy}
+                  disabled={requiredTargetsMissing || hasBlockedLpContractMapping || isBusy}
                   onClick={() => setStage("preview")}
                 >
                   Podgląd importu <ArrowRight className="h-4 w-4" />
@@ -772,6 +787,12 @@ function ImportPage() {
                   Wymagane mapowanie: <code>advertiser_name</code> lub{" "}
                   <code>property_owner_name</code> (np. kolumna „wynajmujący”). Data wygaśnięcia —
                   domyślnie koniec roku z nazwy pliku, jeśli brak kolumny z datą.
+                </p>
+              )}
+              {hasBlockedLpContractMapping && (
+                <p className="text-xs text-destructive">
+                  Kolumna <code>l.p.</code>/<code>lp</code> nie może być mapowana na{" "}
+                  <code>contract_number</code>, bo powoduje błędną deduplikację między zakładkami.
                 </p>
               )}
             </CardContent>
@@ -834,7 +855,7 @@ function ImportPage() {
                 </Button>
                 <Button
                   className="gap-2"
-                  disabled={isBusy || requiredTargetsMissing}
+                  disabled={isBusy || requiredTargetsMissing || hasBlockedLpContractMapping}
                   onClick={() => void confirmImport()}
                 >
                   <CheckCircle2 className="h-4 w-4" />

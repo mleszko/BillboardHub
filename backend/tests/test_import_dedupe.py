@@ -60,6 +60,20 @@ def _build_multisheet_workbook() -> bytes:
     return buf.getvalue()
 
 
+def _build_multisheet_lp_workbook() -> bytes:
+    wb = Workbook()
+    ws1 = wb.active
+    ws1.title = "A"
+    ws1.append(["l.p.", "Najemca", "Miasto", "Adres", "Data_wygasniecia"])
+    ws1.append([1, "Klient A", "Warszawa", "Adres A", "2026-12-31"])
+    ws2 = wb.create_sheet("B")
+    ws2.append(["l.p.", "Najemca", "Miasto", "Adres", "Data_wygasniecia"])
+    ws2.append([1, "Klient B", "Krakow", "Adres B", "2026-12-31"])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def test_reimport_does_not_duplicate_contracts() -> None:
     sample = Path(__file__).with_name("sample_import.csv").read_bytes()
     with TestClient(app) as client:
@@ -211,3 +225,59 @@ def test_multisheet_import_with_sheet_override_per_row() -> None:
         advertiser_names = {item["advertiser_name"] for item in items}
         assert "Klient A" in advertiser_names
         assert "Wlasciciel B" in advertiser_names
+
+
+def test_confirm_mapping_blocks_lp_contract_number_in_multisheet() -> None:
+    workbook = _build_multisheet_lp_workbook()
+    with TestClient(app) as client:
+        client.get("/health")
+        guess = client.post(
+            "/imports/guess-mapping",
+            headers=_DEV_HEADERS,
+            files={"file": ("multi_lp.xlsx", workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={
+                "sheet_names": ["A", "B"],
+                "header_row_1based": "0",
+                "skip_rows_before_header": "0",
+                "unpivot_month_columns": "false",
+                "monthly_aggregate": "mean",
+            },
+        )
+        assert guess.status_code == 200, guess.text
+        proposal = guess.json()
+        forced_mapping = []
+        for row in proposal["mapping_suggestions"]:
+            target = row["target_field_name"]
+            if row["source_column_name"] == "l.p.":
+                target = "contract_number"
+            forced_mapping.append(
+                {
+                    "source_column_name": row["source_column_name"],
+                    "target_field_name": target,
+                    "confirmed_by_user": True,
+                    "user_override": True,
+                    "transform_hint": row.get("transform_hint"),
+                }
+            )
+        confirm = client.post(
+            "/imports/confirm-mapping",
+            headers=_DEV_HEADERS,
+            json={
+                "session_id": proposal["session_id"],
+                "owner_user_id": proposal["owner_user_id"],
+                "mapping": forced_mapping,
+            },
+        )
+        assert confirm.status_code == 200, confirm.text
+        result = confirm.json()
+        assert result["status"] == "completed"
+        assert result["imported_rows"] == 2
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        items = listed.json()["items"]
+        assert len(items) >= 2
+        matching = [item for item in items if item["advertiser_name"] in {"Klient A", "Klient B"}]
+        assert len(matching) >= 2
+        assert {"Klient A", "Klient B"}.issubset({item["advertiser_name"] for item in matching})
+        assert all(item["contract_number"] in (None, "") for item in matching)
