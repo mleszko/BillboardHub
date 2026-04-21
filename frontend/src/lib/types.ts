@@ -4,6 +4,7 @@ export type ContractRow = {
   advertiser_name: string;
   city: string | null;
   expiry_date: string;
+  expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
 };

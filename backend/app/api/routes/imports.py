@@ -5,40 +5,37 @@ import json
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import UserContext, ensure_profile
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.models import Contract, ImportColumnMapping, ImportSession, ImportStatus
 from app.schemas.imports import (
     CANONICAL_FIELDS,
     ImportExecuteResponse,
+    ImportInspectResponse,
+    ImportInspectSheet,
     ImportMappingConfirmationRequest,
     ImportMappingProposalResponse,
+    ImportTemplatePreset,
     MappingProposal,
     REQUIRED_IMPORT_FIELDS,
 )
-from app.services.llm_gateway import chat_json_with_fallback
+from app.services.import_excel import collapse_wide_month_columns, list_excel_sheet_info, read_tabular_dataframe
+from app.services.import_guesser import heuristic_mapping_proposals
 from app.services.import_processor import confirm_mapping_and_import
+from app.services.import_templates import IMPORT_TEMPLATE_PRESETS
+from app.services.llm_gateway import chat_json_with_fallback
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
 PROMPT_VERSION = "v1"
 
 
-def _read_tabular_file(filename: str, file_content: bytes) -> pd.DataFrame:
-    lower_name = filename.lower()
-    if lower_name.endswith(".csv"):
-        return pd.read_csv(io.BytesIO(file_content))
-    if lower_name.endswith(".xlsx"):
-        return pd.read_excel(io.BytesIO(file_content))
-    raise ValueError("Unsupported file type. Allowed extensions: .csv, .xlsx")
-
-
 def _to_json_safe_records(df: pd.DataFrame, limit: int | None = None) -> list[dict[str, Any]]:
     safe_df = df.head(limit) if limit is not None else df
-    # Convert NaN/NaT to None first, then coerce non-JSON scalar types (Timestamp, etc.) via default=str.
     records = safe_df.where(pd.notna(safe_df), None).to_dict(orient="records")
     return json.loads(json.dumps(records, default=str))
 
@@ -132,8 +129,12 @@ def _proposal_from_llm_item(item: dict[str, Any]) -> MappingProposal:
 
 
 def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[str, Any]]) -> tuple[list[MappingProposal], str, str | None]:
-    fallback = _fallback_proposals(source_columns)
+    settings = get_settings()
+    if not settings.import_use_llm:
+        proposals = heuristic_mapping_proposals(source_columns)
+        return proposals, "local-heuristics", "IMPORT_USE_LLM=false — użyto wyłącznie lokalnych heurystyk (bez wysyłki próbek do modelu)."
 
+    fallback = _fallback_proposals(source_columns)
     contract_fields = _contract_model_fields()
     system_prompt = _build_system_prompt(source_columns, contract_fields)
     user_prompt = _build_user_prompt(sample_rows)
@@ -153,23 +154,67 @@ def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[st
 
 
 async def generate_mapping_proposal(
-    db: AsyncSession, user_id: str, file: UploadFile
+    db: AsyncSession,
+    user_id: str,
+    file: UploadFile,
+    *,
+    sheet_name: str = "",
+    header_row_1based: int = 0,
+    skip_rows_before_header: int = 0,
+    unpivot_month_columns: bool = False,
+    monthly_aggregate: str = "mean",
 ) -> ImportMappingProposalResponse:
     file_bytes = await file.read()
     if not file_bytes:
         raise ValueError("Uploaded file is empty.")
 
     file_name = file.filename or "uploaded-file"
-    df = _read_tabular_file(file_name, file_bytes)
+    lower = file_name.lower()
+
+    sheet_arg: str | int | None
+    if lower.endswith(".csv"):
+        sheet_arg = None
+    else:
+        sheet_arg = sheet_name.strip() if sheet_name.strip() else 0
+
+    if monthly_aggregate not in ("mean", "last", "sum_as_monthly"):
+        monthly_aggregate = "mean"
+
+    df, resolved_header_1based = read_tabular_dataframe(
+        file_name,
+        file_bytes,
+        sheet_name=sheet_arg,
+        header_row_1based=header_row_1based,
+        skip_rows_before_header=max(0, skip_rows_before_header),
+    )
+
+    unpivot_applied = False
+    if unpivot_month_columns:
+        before_cols = len(df.columns)
+        df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
+        unpivot_applied = before_cols != len(df.columns)
+
+    df = df.dropna(how="all")
     source_columns = [str(column) for column in df.columns.tolist()]
     sample_rows = _to_json_safe_records(df, limit=2)
 
     proposals, guessed_by_model, warning = _guess_mapping_with_gpt(source_columns, sample_rows)
 
+    parse_options: dict[str, object] = {
+        "sheet_name": sheet_name.strip() or None,
+        "header_row_1based": resolved_header_1based,
+        "header_row_requested": header_row_1based,
+        "header_auto": header_row_1based < 1,
+        "skip_rows_before_header": skip_rows_before_header,
+        "unpivot_month_columns": unpivot_month_columns,
+        "unpivot_applied": unpivot_applied,
+        "monthly_aggregate": monthly_aggregate,
+    }
+
     import_session = ImportSession(
         owner_user_id=user_id,
         original_file_name=file_name,
-        file_type="xlsx" if file_name.lower().endswith(".xlsx") else "csv",
+        file_type="xlsx" if lower.endswith((".xlsx", ".xls")) else "csv",
         status=ImportStatus.mapped,
         total_rows=int(len(df.index)),
         llm_model=guessed_by_model,
@@ -179,6 +224,7 @@ async def generate_mapping_proposal(
                 "source_columns": source_columns,
                 "sample_rows": sample_rows,
                 "all_rows": _to_json_safe_records(df),
+                "parse_options": parse_options,
             },
             ensure_ascii=False,
         ),
@@ -215,17 +261,65 @@ async def generate_mapping_proposal(
         mapping_suggestions=proposals,
         guessed_by_model=guessed_by_model,
         warning=warning,
+        parse_options=parse_options,
     )
+
+
+@router.get("/templates", response_model=list[ImportTemplatePreset])
+async def list_import_templates(_: UserContext = Depends(ensure_profile)) -> list[ImportTemplatePreset]:
+    return [ImportTemplatePreset.model_validate(t) for t in IMPORT_TEMPLATE_PRESETS]
+
+
+@router.post("/inspect", response_model=ImportInspectResponse)
+async def inspect_spreadsheet(
+    file: UploadFile = File(...),
+    _: UserContext = Depends(ensure_profile),
+) -> ImportInspectResponse:
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+    file_name = file.filename or "uploaded-file"
+    lower = file_name.lower()
+    if lower.endswith(".csv"):
+        df = pd.read_csv(io.BytesIO(file_bytes), header=None, nrows=500)
+        sheets = [ImportInspectSheet(name="(CSV)", row_count=int(len(df.index)), column_count=int(len(df.columns)))]
+    elif lower.endswith((".xlsx", ".xls")):
+        raw = list_excel_sheet_info(file_bytes, file_name)
+        sheets = [ImportInspectSheet(name=s["name"], row_count=s["row_count"], column_count=s["column_count"]) for s in raw]
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type. Allowed: .csv, .xlsx, .xls",
+        )
+    return ImportInspectResponse(file_name=file_name, sheets=sheets)
+
+
+def _form_bool(value: str) -> bool:
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
 @router.post("/guess-mapping", response_model=ImportMappingProposalResponse)
 async def guess_mapping(
     file: UploadFile = File(...),
+    sheet_name: str = Form(""),
+    header_row_1based: int = Form(0),
+    skip_rows_before_header: int = Form(0),
+    unpivot_month_columns: str = Form("false"),
+    monthly_aggregate: str = Form("mean"),
     user: UserContext = Depends(ensure_profile),
     db: AsyncSession = Depends(get_db),
 ) -> ImportMappingProposalResponse:
     try:
-        return await generate_mapping_proposal(db=db, user_id=user.user_id, file=file)
+        return await generate_mapping_proposal(
+            db=db,
+            user_id=user.user_id,
+            file=file,
+            sheet_name=sheet_name,
+            header_row_1based=header_row_1based,
+            skip_rows_before_header=skip_rows_before_header,
+            unpivot_month_columns=_form_bool(unpivot_month_columns),
+            monthly_aggregate=monthly_aggregate,
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

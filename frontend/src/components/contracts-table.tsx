@@ -1,12 +1,24 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { appConfig } from "@/lib/config";
 import type { ContractRow } from "@/lib/types";
 
 type ContractsTableProps = {
   contracts: ContractRow[];
 };
 
+const devHeaders = {
+  "x-dev-user-id": "demo-user-1",
+  "x-dev-user-email": "demo@billboardhub.local",
+};
+
 export function ContractsTable({ contracts }: ContractsTableProps) {
+  const router = useRouter();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   if (!contracts.length) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
@@ -26,6 +38,7 @@ export function ContractsTable({ contracts }: ContractsTableProps) {
             <th className="px-4 py-3 font-medium">Expiry</th>
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium">Monthly Net</th>
+            <th className="px-4 py-3 font-medium w-24" />
           </tr>
         </thead>
         <tbody>
@@ -34,10 +47,37 @@ export function ContractsTable({ contracts }: ContractsTableProps) {
               <td className="px-4 py-3">{contract.contract_number ?? "—"}</td>
               <td className="px-4 py-3">{contract.advertiser_name}</td>
               <td className="px-4 py-3">{contract.city ?? "—"}</td>
-              <td className="px-4 py-3">{contract.expiry_date}</td>
+              <td className="px-4 py-3">
+                {contract.expiry_unknown ? "—" : contract.expiry_date}
+              </td>
               <td className="px-4 py-3 capitalize">{contract.contract_status.replaceAll("_", " ")}</td>
               <td className="px-4 py-3">
                 {contract.monthly_rent_net !== null ? `${contract.monthly_rent_net.toFixed(2)} PLN` : "—"}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                  disabled={deletingId === contract.id}
+                  onClick={() => {
+                    const label = contract.contract_number ?? contract.advertiser_name;
+                    if (!window.confirm(`Delete contract “${label}”? This cannot be undone.`)) return;
+                    void (async () => {
+                      setDeletingId(contract.id);
+                      try {
+                        const response = await fetch(`${appConfig.backendUrl}/contracts/${contract.id}`, {
+                          method: "DELETE",
+                          headers: devHeaders,
+                        });
+                        if (response.ok) router.refresh();
+                      } finally {
+                        setDeletingId(null);
+                      }
+                    })();
+                  }}
+                >
+                  {deletingId === contract.id ? "…" : "Delete"}
+                </button>
               </td>
             </tr>
           ))}
@@ -54,10 +94,7 @@ export async function fetchContracts(): Promise<ContractRow[]> {
     const response = await fetch(`${backendUrl}/contracts`, {
       method: "GET",
       cache: "no-store",
-      headers: {
-        "x-dev-user-id": "demo-user-1",
-        "x-dev-user-email": "demo@billboardhub.local",
-      },
+      headers: devHeaders,
     });
     if (!response.ok) {
       return [];

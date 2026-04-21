@@ -8,14 +8,23 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
+from app.models.models import BillboardType, Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
 from app.schemas.imports import ImportExecuteResponse, ImportMappingConfirmationRequest
+from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
+from app.services.import_excel import is_noise_import_row, is_probable_summary_raw_row
 from app.services.import_guesser import parse_date, parse_decimal
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
     date_fields = {"start_date", "expiry_date"}
-    decimal_fields = {"latitude", "longitude", "monthly_rent_net", "monthly_rent_gross", "vat_rate"}
+    decimal_fields = {
+        "latitude",
+        "longitude",
+        "monthly_rent_net",
+        "monthly_rent_gross",
+        "total_contract_value_net",
+        "vat_rate",
+    }
 
     if target_field_name in date_fields:
         return parse_date(value)
@@ -44,6 +53,41 @@ def _to_decimal(value: Any) -> Decimal | None:
         return Decimal(str(value))
     except Exception:  # noqa: BLE001
         return None
+
+
+def _clean_party_field(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        s = value.strip()
+        if not s or s in {"?", "-", "—", "..", "…"}:
+            return None
+        return s
+    return value
+
+
+def _coerce_billboard_type(raw: Any) -> BillboardType:
+    if raw is None or raw == "":
+        return BillboardType.other
+    if isinstance(raw, BillboardType):
+        return raw
+    s = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
+    aliases = {
+        "led": BillboardType.led,
+        "citylight": BillboardType.citylight,
+        "city_light": BillboardType.citylight,
+        "backlight": BillboardType.backlight,
+        "backlit": BillboardType.backlight,
+        "classic": BillboardType.classic,
+        "inny": BillboardType.other,
+        "other": BillboardType.other,
+    }
+    if s in aliases:
+        return aliases[s]
+    try:
+        return BillboardType(s)
+    except ValueError:
+        return BillboardType.other
 
 
 def _to_json_safe(value: Any) -> Any:
@@ -78,11 +122,11 @@ async def confirm_mapping_and_import(
         mapped.transform_hint = proposed.transform_hint
 
     session.status = ImportStatus.confirmed
-    required_targets = {"advertiser_name", "expiry_date"}
     selected_targets = {item.target_field_name for item in payload.mapping if item.target_field_name}
-    missing_targets = required_targets.difference(selected_targets)
-    if missing_targets:
-        raise ValueError(f"Missing required mapped fields: {', '.join(sorted(missing_targets))}")
+    if not selected_targets.intersection({"advertiser_name", "property_owner_name"}):
+        raise ValueError(
+            "Brak mapowania na „advertiser_name” lub „property_owner_name” — potrzebna kolumna z najemcą / wynajmującym."
+        )
 
     await db.execute(delete(ImportRow).where(ImportRow.import_session_id == payload.session_id))
 
@@ -122,10 +166,27 @@ async def confirm_mapping_and_import(
                 normalized_value = parse_date(raw_value)
             normalized_payload[target_field] = normalized_value
 
+        normalized_payload["advertiser_name"] = _clean_party_field(normalized_payload.get("advertiser_name"))
+        normalized_payload["property_owner_name"] = _clean_party_field(normalized_payload.get("property_owner_name"))
+
+        if not normalized_payload.get("advertiser_name") and normalized_payload.get("property_owner_name"):
+            normalized_payload["advertiser_name"] = normalized_payload["property_owner_name"]
+
+        if not normalized_payload.get("expiry_date"):
+            normalized_payload["expiry_date"] = PLACEHOLDER_CONTRACT_EXPIRY
+
+        if is_probable_summary_raw_row(raw_row):
+            validation_errors.append(
+                {"field": "row", "reason": "Wiersz pominięty (RAZEM/SUMA lub pusty)."}
+            )
         if not normalized_payload.get("advertiser_name"):
             validation_errors.append({"field": "advertiser_name", "reason": "Required field missing"})
         if not normalized_payload.get("expiry_date"):
             validation_errors.append({"field": "expiry_date", "reason": "Required field missing or invalid date"})
+        if is_noise_import_row(normalized_payload):
+            validation_errors.append(
+                {"field": "row", "reason": "Wiersz pominięty (suma częściowa, nagłówek grupy lub pusty klient)."}
+            )
 
         row_status = ImportRowStatus.invalid if validation_errors else ImportRowStatus.valid
         import_row = ImportRow(
@@ -155,7 +216,8 @@ async def confirm_mapping_and_import(
                 advertiser_name=normalized_payload.get("advertiser_name"),
                 property_owner_name=normalized_payload.get("property_owner_name"),
                 billboard_code=normalized_payload.get("billboard_code"),
-                billboard_type=normalized_payload.get("billboard_type") or "other",
+                billboard_type=_coerce_billboard_type(normalized_payload.get("billboard_type")),
+                surface_size=normalized_payload.get("surface_size"),
                 location_address=normalized_payload.get("location_address"),
                 city=normalized_payload.get("city"),
                 latitude=_to_decimal(normalized_payload.get("latitude")),
@@ -164,8 +226,12 @@ async def confirm_mapping_and_import(
                 expiry_date=_to_date(normalized_payload.get("expiry_date")),
                 monthly_rent_net=_to_decimal(normalized_payload.get("monthly_rent_net")),
                 monthly_rent_gross=_to_decimal(normalized_payload.get("monthly_rent_gross")),
+                total_contract_value_net=_to_decimal(normalized_payload.get("total_contract_value_net")),
                 currency=normalized_payload.get("currency") or "PLN",
                 vat_rate=_to_decimal(normalized_payload.get("vat_rate")),
+                contact_person=normalized_payload.get("contact_person"),
+                contact_phone=normalized_payload.get("contact_phone"),
+                contact_email=normalized_payload.get("contact_email"),
                 notes=normalized_payload.get("notes"),
             )
         )
@@ -177,7 +243,7 @@ async def confirm_mapping_and_import(
     session.valid_rows = valid_rows
     session.invalid_rows = invalid_rows
     session.imported_rows = len(contracts_to_create)
-    session.status = ImportStatus.completed if invalid_rows == 0 else ImportStatus.failed
+    session.status = ImportStatus.failed if session.imported_rows == 0 else ImportStatus.completed
     session.completed_at = datetime.utcnow()
 
     await db.commit()

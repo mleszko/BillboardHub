@@ -1,0 +1,19 @@
+---
+description: Pytest conventions for backend/tests
+globs: backend/tests/**/*.py
+alwaysApply: false
+---
+
+# Testing (pytest) — BillboardHub
+
+- Deterministic tests: no real network unless explicitly marked integration.
+- `backend/tests/conftest.py` sets isolated SQLite + `IMPORT_USE_LLM=false` for stable runs.
+- Golden workbook test uses env `IMPORT_GOLDEN_WORKBOOK_PATH` only; never commit client filenames in tests.
+- Arrange / Act / Assert; name tests after behavior.
+- Assert outcomes (status codes, row counts), not private implementation details.
+
+## Commands
+
+```bash
+cd backend && .venv/bin/python -m pytest tests/ -q
+```
