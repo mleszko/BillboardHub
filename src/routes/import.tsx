@@ -164,8 +164,7 @@ function ImportPage() {
 
   const requiredTargetsMissing = useMemo(() => {
     const selected = new Set(mapping.map((item) => item.target_field_name).filter(Boolean));
-    const hasParty =
-      selected.has("advertiser_name") || selected.has("property_owner_name");
+    const hasParty = selected.has("advertiser_name") || selected.has("property_owner_name");
     return !hasParty;
   }, [mapping]);
 
@@ -382,9 +381,9 @@ function ImportPage() {
               <div>
                 <h3 className="text-lg font-semibold">Wgraj plik Excel z portfelem</h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                  Najpierw wykryjemy arkusze i rozmiar tabeli.{" "}
-                  <strong>Wiersz nagłówka</strong> wybierany jest automatycznie; możesz doprecyzować
-                  ustawienia zaawansowane lub <strong>złączyć kolumny miesięczne</strong>.
+                  Najpierw wykryjemy arkusze i rozmiar tabeli. <strong>Wiersz nagłówka</strong>{" "}
+                  wybierany jest automatycznie; możesz doprecyzować ustawienia zaawansowane lub{" "}
+                  <strong>złączyć kolumny miesięczne</strong>.
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2 sm:flex-row">

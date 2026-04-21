@@ -304,9 +304,7 @@ export const clients = Array.from(
 
 export function statusFromContract(b: Billboard): ContractStatus {
   if (!b.contractEnd) return "vacant";
-  const days = Math.ceil(
-    (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  );
+  const days = Math.ceil((new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (days <= 30) return "critical";
   if (days <= 60) return "expiring_soon";
   return "active";
@@ -314,9 +312,7 @@ export function statusFromContract(b: Billboard): ContractStatus {
 
 export function daysRemaining(b: Billboard): number | null {
   if (b.expiryUnknown || !b.contractEnd) return null;
-  return Math.ceil(
-    (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  );
+  return Math.ceil((new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 export function formatPLN(n: number) {
@@ -330,9 +326,7 @@ export function formatPLN(n: number) {
 export const stats = () => {
   const total = billboards.length;
   const occupied = billboards.filter((b) => b.client).length;
-  const monthlyRevenue = billboards
-    .filter((b) => b.client)
-    .reduce((s, b) => s + b.monthlyPrice, 0);
+  const monthlyRevenue = billboards.filter((b) => b.client).reduce((s, b) => s + b.monthlyPrice, 0);
   const expiring30 = billboards.filter((b) => {
     const d = daysRemaining(b);
     return d !== null && d <= 30;
@@ -356,9 +350,26 @@ export const revenueTrend = [
 ];
 
 export const recentActivity = [
-  { id: 1, type: "payment", text: "T-Mobile opłacił fakturę FV/2025/11/142", amount: 9200, when: "2h temu" },
-  { id: 2, type: "renewal", text: "PKO BP — wysłano propozycję przedłużenia (BIA-003)", when: "5h temu" },
+  {
+    id: 1,
+    type: "payment",
+    text: "T-Mobile opłacił fakturę FV/2025/11/142",
+    amount: 9200,
+    when: "2h temu",
+  },
+  {
+    id: 2,
+    type: "renewal",
+    text: "PKO BP — wysłano propozycję przedłużenia (BIA-003)",
+    when: "5h temu",
+  },
   { id: 3, type: "alert", text: "Lidl Polska — umowa wygasa za 5 dni (BIA-007)", when: "wczoraj" },
   { id: 4, type: "ai", text: "AI: nowa umowa Allegro przetworzona (SUW-001)", when: "wczoraj" },
-  { id: 5, type: "payment", text: "Biedronka — płatność potwierdzona", amount: 8400, when: "2 dni temu" },
+  {
+    id: 5,
+    type: "payment",
+    text: "Biedronka — płatność potwierdzona",
+    amount: 8400,
+    when: "2 dni temu",
+  },
 ];

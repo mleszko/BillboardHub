@@ -16,13 +16,13 @@ description: >-
 
 ## Key modules
 
-| Area | Module |
-|------|--------|
-| Read / header guess / noise rows | `backend/app/services/import_excel.py` |
-| Column heuristics | `backend/app/services/import_guesser.py` (`parse_date`, `parse_decimal`) |
-| DB + validation | `backend/app/services/import_processor.py` |
-| Routes | `backend/app/api/routes/imports.py` |
-| Placeholder end date | `backend/app/constants.py` → `PLACEHOLDER_CONTRACT_EXPIRY`; API sets `expiry_unknown` |
+| Area                             | Module                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| Read / header guess / noise rows | `backend/app/services/import_excel.py`                                                |
+| Column heuristics                | `backend/app/services/import_guesser.py` (`parse_date`, `parse_decimal`)              |
+| DB + validation                  | `backend/app/services/import_processor.py`                                            |
+| Routes                           | `backend/app/api/routes/imports.py`                                                   |
+| Placeholder end date             | `backend/app/constants.py` → `PLACEHOLDER_CONTRACT_EXPIRY`; API sets `expiry_unknown` |
 
 ## Semantics
 

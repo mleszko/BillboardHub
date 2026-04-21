@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -99,7 +100,7 @@ export function billboardToFormValues(b: Billboard): ContractFormValues {
     surface_size: b.size,
     billboard_type: b.type.toLowerCase().replace(/\s+/g, ""),
     start_date: b.contractStart ? b.contractStart.slice(0, 10) : "",
-    expiry_date: b.expiryUnknown ? "" : (b.contractEnd ? b.contractEnd.slice(0, 10) : ""),
+    expiry_date: b.expiryUnknown ? "" : b.contractEnd ? b.contractEnd.slice(0, 10) : "",
     monthly_rent_net: String(b.monthlyPrice ?? ""),
     expiry_unknown: Boolean(b.expiryUnknown),
   };
@@ -115,9 +116,7 @@ function mapFormToBillboardType(raw: string): Billboard["type"] {
 
 function statusFromForm(expiryUnknown: boolean, contractEndIso: string): ContractStatus {
   if (expiryUnknown) return "active";
-  const days = Math.ceil(
-    (new Date(contractEndIso).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  );
+  const days = Math.ceil((new Date(contractEndIso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (days < 0) return "critical";
   if (days <= 30) return "critical";
   if (days <= 60) return "expiring_soon";
@@ -287,9 +286,7 @@ export function ContractFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {mode === "create" ? "Nowy billboard / umowa" : "Edytuj umowę"}
-          </DialogTitle>
+          <DialogTitle>{mode === "create" ? "Nowy billboard / umowa" : "Edytuj umowę"}</DialogTitle>
           <DialogDescription>
             Pola podstawowe jak w imporcie Excel. Datę końca możesz pominąć — zapiszemy bezpieczny
             placeholder i oznaczymy umowę jako bez znanej daty wygaśnięcia.
@@ -426,7 +423,10 @@ export function ContractFormDialog({
                 }))
               }
             />
-            <Label htmlFor="cf-unknown" className="cursor-pointer font-normal text-muted-foreground">
+            <Label
+              htmlFor="cf-unknown"
+              className="cursor-pointer font-normal text-muted-foreground"
+            >
               Nie znam daty końca umowy
             </Label>
           </div>

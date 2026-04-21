@@ -3,6 +3,7 @@
 BillboardHub is evolving from a quick mock into a production-ready SaaS for billboard contract management.
 
 This repository currently contains:
+
 - active UI (TanStack + Vite app in repo root),
 - `backend/` (FastAPI + SQLAlchemy async),
 - `infra/` (Docker compose and deployment support).
@@ -19,7 +20,9 @@ This repository currently contains:
 ## Key Implemented Flows
 
 ### 1) AI Excel Import Wizard
+
 Backend endpoints:
+
 - `POST /imports/guess-mapping` (`.csv`/`.xlsx`)
   - reads with `pandas`
   - sends headers + first 2 rows to GPT-4o (or fallback matcher)
@@ -31,10 +34,12 @@ Backend endpoints:
   - only then writes contracts to DB
 
 ### 2) Auth Mode Contracts
+
 - `GET /contracts` returns the stable contract list
 - Frontend `/auth/contracts` renders an ascetic contracts table
 
 ### 3) Demo Mode Hubert
+
 - `POST /hubert/ask`
 - Demo-mode only
 - domain constrained to billboard ROI and property strategy
@@ -49,12 +54,14 @@ docker compose -f infra/docker-compose.yml up --build
 ```
 
 Services:
+
 - frontend: http://localhost:5173
 - backend: http://localhost:8000
 
 ### Option B: Run manually
 
 Backend:
+
 ```bash
 cd backend
 python3 -m pip install --user -r requirements.txt
@@ -62,6 +69,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Frontend:
+
 ```bash
 npm install
 npm run dev:frontend
@@ -92,23 +100,28 @@ npm run check
 ```
 
 Git commit hook (no push) runs automatically via Husky and executes:
+
 - frontend lint (`npm run lint`)
 - backend lint (`npm run lint:backend`, Ruff)
 - backend tests (`npm run test:backend`, Pytest)
 
 Notes:
+
 - `dev:all` runs the active Vite frontend at `http://localhost:5173` and backend at `http://localhost:8000`.
 
 ## Environment Setup
 
 ### Backend (`backend/.env`)
+
 Copy from `backend/.env.example` and configure:
+
 - `DATABASE_URL` (Supabase Postgres URL in production)
 - `OPENAI_API_KEY`
 - `SUPABASE_JWT_SECRET`
 - `ALLOWED_ORIGINS`
 
 ## Supabase (DB + Auth)
+
 1. Create project in Supabase.
 2. Enable email/password authentication.
 3. Get:
@@ -120,6 +133,7 @@ Copy from `backend/.env.example` and configure:
 5. Run migrations/schema setup (Alembic recommended next step; current backend auto-creates tables for local dev).
 
 ## Railway (FastAPI backend)
+
 1. Create a new Railway service from this repository.
 2. Set root directory to `backend`.
 3. Set environment variables from `backend/.env.example`.
@@ -129,6 +143,7 @@ Copy from `backend/.env.example` and configure:
 6. Set `ALLOWED_ORIGINS` to your Vercel frontend URL.
 
 ## Frontend deployment
+
 Deploy the root Vite app to your preferred static host (Cloudflare Pages, Netlify, Vercel static).
 Set backend URL env var according to `src/lib/backend-auth.ts` / Vite env usage.
 
@@ -148,6 +163,7 @@ This repo now includes GitHub Actions workflows:
 ### Required GitHub Secrets
 
 For Railway auto-deploy:
+
 - `RAILWAY_TOKEN`
 - `RAILWAY_SERVICE_ID`
 
@@ -164,6 +180,7 @@ For your current stage (demo + likely one user), this setup is realistic on free
 - **Static frontend host**: Vite build output
 
 Recommended rollout:
+
 1. Configure Supabase project and env values.
 2. Deploy backend on Railway once manually to verify env wiring.
 3. Deploy frontend static build once manually.
