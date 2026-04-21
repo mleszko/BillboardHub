@@ -404,75 +404,75 @@ function AppPage() {
             </Button>
           }
         >
-        <div className="space-y-4 p-3 md:space-y-6 md:p-6">
-          <HubertWelcomePanel />
-          <StatsHeader data={summary} />
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
-            <div className="lg:col-span-2">
-              <RevenueChart data={projectedRevenue} />
-            </div>
-            <RecentActivity items={activityFeed} />
-          </div>
-
-          <Card>
-            <div className="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
-              <div>
-                <h3 className="text-base font-semibold">Wymagają uwagi</h3>
-                <p className="text-xs text-muted-foreground">Umowy wygasające w ciągu 60 dni</p>
+          <div className="space-y-4 p-3 md:space-y-6 md:p-6">
+            <HubertWelcomePanel />
+            <StatsHeader data={summary} />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+              <div className="lg:col-span-2">
+                <RevenueChart data={projectedRevenue} />
               </div>
-              <Button asChild variant="ghost" size="sm" className="gap-1">
-                <Link to="/contracts">
-                  Wszystkie <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
+              <RecentActivity items={activityFeed} />
             </div>
-            <CardContent className="space-y-2">
-              {expiringDemo.map((b) => {
-                const d = daysRemaining(b)!;
-                return (
-                  <div
-                    key={b.id}
-                    className="flex flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/40 sm:flex-row sm:items-center sm:gap-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-muted-foreground">
-                          {b.code}
-                        </span>
-                        <StatusBadge status={b.status} />
+
+            <Card>
+              <div className="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
+                <div>
+                  <h3 className="text-base font-semibold">Wymagają uwagi</h3>
+                  <p className="text-xs text-muted-foreground">Umowy wygasające w ciągu 60 dni</p>
+                </div>
+                <Button asChild variant="ghost" size="sm" className="gap-1">
+                  <Link to="/contracts">
+                    Wszystkie <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </div>
+              <CardContent className="space-y-2">
+                {expiringDemo.map((b) => {
+                  const d = daysRemaining(b)!;
+                  return (
+                    <div
+                      key={b.id}
+                      className="flex flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/40 sm:flex-row sm:items-center sm:gap-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-muted-foreground">
+                            {b.code}
+                          </span>
+                          <StatusBadge status={b.status} />
+                        </div>
+                        <div className="mt-0.5 truncate text-sm font-medium">{b.client}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {b.city} · {b.address}
+                        </div>
                       </div>
-                      <div className="mt-0.5 truncate text-sm font-medium">{b.client}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {b.city} · {b.address}
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <div className="text-right">
+                          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                            Pozostało
+                          </div>
+                          <div className="text-sm font-semibold tabular-nums">
+                            {d < 0 ? "wygasła" : `${d} dni`}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                            Wartość/mc
+                          </div>
+                          <div className="text-sm font-semibold tabular-nums">
+                            {formatPLN(b.monthlyPrice)}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" className="hidden md:inline-flex">
+                          Przedłuż
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 sm:gap-6">
-                      <div className="text-right">
-                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                          Pozostało
-                        </div>
-                        <div className="text-sm font-semibold tabular-nums">
-                          {d < 0 ? "wygasła" : `${d} dni`}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                          Wartość/mc
-                        </div>
-                        <div className="text-sm font-semibold tabular-nums">
-                          {formatPLN(b.monthlyPrice)}
-                        </div>
-                      </div>
-                      <Button size="sm" variant="outline" className="hidden md:inline-flex">
-                        Przedłuż
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </div>
         </AppShell>
         <ContractFormDialog
           open={contractDialogOpen}
@@ -498,235 +498,239 @@ function AppPage() {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Nowy billboard</span>
             </Button>
-          <Button asChild size="sm" variant="outline" className="gap-1.5">
-            <Link to="/import">
-              <FileSpreadsheet className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {demo ? "Załaduj demo plik" : "Importuj Excel"}
-              </span>
-            </Link>
-          </Button>
-        </div>
-      }
-    >
-      <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-10">
-        <HubertWelcomePanel liveSummary={summary} portfolioCities={cities} />
-        <StatsHeader data={summary} />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
-          <div className="lg:col-span-2">
-            <RevenueChart data={projectedRevenue} />
+            <Button asChild size="sm" variant="outline" className="gap-1.5">
+              <Link to="/import">
+                <FileSpreadsheet className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  {demo ? "Załaduj demo plik" : "Importuj Excel"}
+                </span>
+              </Link>
+            </Button>
           </div>
-          <RecentActivity items={activityFeed} />
-        </div>
-        {/* Alerts */}
-        {!demo && loadError && (
-          <Card className="border-destructive/30 bg-destructive/5">
-            <CardContent className="p-4 text-sm text-destructive">{loadError}</CardContent>
-          </Card>
-        )}
-        <section className="grid gap-3 sm:grid-cols-2">
-          <AlertCard tone="critical" count={expiring30.length} label="Wygasają w ciągu 30 dni" />
-          <AlertCard tone="warning" count={expiring60.length} label="Wygasają w ciągu 31–60 dni" />
-        </section>
-
-        {/* Filters */}
-        <section className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => {
-                const value = e.target.value;
-                setQ(value);
-                window.sessionStorage.setItem(GLOBAL_SEARCH_KEY, value);
-              }}
-              placeholder="Szukaj klienta, miasta, lokalizacji…"
-              className="h-10 pl-9"
+        }
+      >
+        <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-10">
+          <HubertWelcomePanel liveSummary={summary} portfolioCities={cities} />
+          <StatsHeader data={summary} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+            <div className="lg:col-span-2">
+              <RevenueChart data={projectedRevenue} />
+            </div>
+            <RecentActivity items={activityFeed} />
+          </div>
+          {/* Alerts */}
+          {!demo && loadError && (
+            <Card className="border-destructive/30 bg-destructive/5">
+              <CardContent className="p-4 text-sm text-destructive">{loadError}</CardContent>
+            </Card>
+          )}
+          <section className="grid gap-3 sm:grid-cols-2">
+            <AlertCard tone="critical" count={expiring30.length} label="Wygasają w ciągu 30 dni" />
+            <AlertCard
+              tone="warning"
+              count={expiring60.length}
+              label="Wygasają w ciągu 31–60 dni"
             />
-          </div>
-          <Select value={city} onValueChange={setCity}>
-            <SelectTrigger className="h-10 w-full sm:w-48">
-              <SelectValue placeholder="Miasto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Wszystkie miasta</SelectItem>
-              {cities.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </section>
+          </section>
 
-        {/* Table — Zen minimal */}
-        <section>
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">{contracts.length} umów</h2>
-            <span className="text-[11px] text-muted-foreground">
-              Kliknij nagłówek, aby sortować
-            </span>
-          </div>
+          {/* Filters */}
+          <section className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setQ(value);
+                  window.sessionStorage.setItem(GLOBAL_SEARCH_KEY, value);
+                }}
+                placeholder="Szukaj klienta, miasta, lokalizacji…"
+                className="h-10 pl-9"
+              />
+            </div>
+            <Select value={city} onValueChange={setCity}>
+              <SelectTrigger className="h-10 w-full sm:w-48">
+                <SelectValue placeholder="Miasto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszystkie miasta</SelectItem>
+                {cities.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </section>
 
-          {/* Mobile cards */}
-          <div className="space-y-2 md:hidden">
-            {contracts.map((b) => {
-              const d = b.expiryUnknown ? null : daysRemainingFromIso(b.expiryDate);
-              return (
-                <Card key={b.id} className="border-0 shadow-none ring-1 ring-border">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-semibold leading-tight">{b.advertiserName}</div>
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {b.city || "—"} · {b.reference || "Brak numeru umowy"}
+          {/* Table — Zen minimal */}
+          <section>
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-sm font-medium text-muted-foreground">{contracts.length} umów</h2>
+              <span className="text-[11px] text-muted-foreground">
+                Kliknij nagłówek, aby sortować
+              </span>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="space-y-2 md:hidden">
+              {contracts.map((b) => {
+                const d = b.expiryUnknown ? null : daysRemainingFromIso(b.expiryDate);
+                return (
+                  <Card key={b.id} className="border-0 shadow-none ring-1 ring-border">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-semibold leading-tight">{b.advertiserName}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {b.city || "—"} · {b.reference || "Brak numeru umowy"}
+                          </div>
                         </div>
-                      </div>
-                      <StatusBadge status={b.badgeStatus} />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <span className="tabular-nums">
-                        {b.expiryUnknown ? (
-                          <span className="text-muted-foreground">Brak daty wygaśnięcia</span>
-                        ) : (
-                          <>
-                            {format(new Date(b.expiryDate), "dd.MM.yyyy")}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {d != null && d < 0 ? "wygasła" : `${d} dni`}
-                            </span>
-                          </>
-                        )}
-                      </span>
-                      <span className="font-semibold tabular-nums">
-                        {formatPLN(b.monthlyRentNet || 0)}
-                      </span>
-                    </div>
-                    {(!demo || b.id.startsWith("local-")) && (
-                      <div className="mt-2 flex justify-end">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => openEditContract(b)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edytuj
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-lg border md:block">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3">
-                    <SortBtn
-                      label="Lokalizacja"
-                      active={sortKey === "city"}
-                      dir={sortDir}
-                      onClick={() => setSort("city")}
-                    />
-                  </th>
-                  <th className="px-4 py-3">
-                    <SortBtn
-                      label="Klient"
-                      active={sortKey === "client"}
-                      dir={sortDir}
-                      onClick={() => setSort("client")}
-                    />
-                  </th>
-                  <th className="px-4 py-3">
-                    <SortBtn
-                      label="Wygaśnięcie"
-                      active={sortKey === "expiry"}
-                      dir={sortDir}
-                      onClick={() => setSort("expiry")}
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    <SortBtn
-                      label="Cena/mc"
-                      active={sortKey === "price"}
-                      dir={sortDir}
-                      onClick={() => setSort("price")}
-                      alignRight
-                    />
-                  </th>
-                  <th className="px-4 py-3 w-32">Status</th>
-                  <th className="px-4 py-3 w-28 text-right">Akcje</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contracts.map((b) => {
-                  const d = b.expiryUnknown ? null : daysRemainingFromIso(b.expiryDate);
-                  return (
-                    <tr
-                      key={b.id}
-                      className="border-b last:border-0 transition-colors hover:bg-accent/40"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{b.city || "—"}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {b.reference || "Brak numeru umowy"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-medium">{b.advertiserName}</td>
-                      <td className="px-4 py-3">
-                        {b.expiryUnknown ? (
-                          <div className="text-sm text-muted-foreground">Brak w imporcie</div>
-                        ) : (
-                          <>
-                            <div className="tabular-nums">
-                              {format(new Date(b.expiryDate), "dd.MM.yyyy")}
-                            </div>
-                            <div
-                              className={cn(
-                                "text-xs tabular-nums",
-                                d != null && d <= 30
-                                  ? "text-destructive font-semibold"
-                                  : "text-muted-foreground",
-                              )}
-                            >
-                              {d != null && d < 0 ? "wygasła" : `${d} dni pozostało`}
-                            </div>
-                          </>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                        {formatPLN(b.monthlyRentNet || 0)}
-                      </td>
-                      <td className="px-4 py-3">
                         <StatusBadge status={b.badgeStatus} />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {(!demo || b.id.startsWith("local-")) && (
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-sm">
+                        <span className="tabular-nums">
+                          {b.expiryUnknown ? (
+                            <span className="text-muted-foreground">Brak daty wygaśnięcia</span>
+                          ) : (
+                            <>
+                              {format(new Date(b.expiryDate), "dd.MM.yyyy")}
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {d != null && d < 0 ? "wygasła" : `${d} dni`}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                        <span className="font-semibold tabular-nums">
+                          {formatPLN(b.monthlyRentNet || 0)}
+                        </span>
+                      </div>
+                      {(!demo || b.id.startsWith("local-")) && (
+                        <div className="mt-2 flex justify-end">
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             className="gap-1"
                             onClick={() => openEditContract(b)}
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline">Edytuj</span>
+                            Edytuj
                           </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-hidden rounded-lg border md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3">
+                      <SortBtn
+                        label="Lokalizacja"
+                        active={sortKey === "city"}
+                        dir={sortDir}
+                        onClick={() => setSort("city")}
+                      />
+                    </th>
+                    <th className="px-4 py-3">
+                      <SortBtn
+                        label="Klient"
+                        active={sortKey === "client"}
+                        dir={sortDir}
+                        onClick={() => setSort("client")}
+                      />
+                    </th>
+                    <th className="px-4 py-3">
+                      <SortBtn
+                        label="Wygaśnięcie"
+                        active={sortKey === "expiry"}
+                        dir={sortDir}
+                        onClick={() => setSort("expiry")}
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-right">
+                      <SortBtn
+                        label="Cena/mc"
+                        active={sortKey === "price"}
+                        dir={sortDir}
+                        onClick={() => setSort("price")}
+                        alignRight
+                      />
+                    </th>
+                    <th className="px-4 py-3 w-32">Status</th>
+                    <th className="px-4 py-3 w-28 text-right">Akcje</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((b) => {
+                    const d = b.expiryUnknown ? null : daysRemainingFromIso(b.expiryDate);
+                    return (
+                      <tr
+                        key={b.id}
+                        className="border-b last:border-0 transition-colors hover:bg-accent/40"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{b.city || "—"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {b.reference || "Brak numeru umowy"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-medium">{b.advertiserName}</td>
+                        <td className="px-4 py-3">
+                          {b.expiryUnknown ? (
+                            <div className="text-sm text-muted-foreground">Brak w imporcie</div>
+                          ) : (
+                            <>
+                              <div className="tabular-nums">
+                                {format(new Date(b.expiryDate), "dd.MM.yyyy")}
+                              </div>
+                              <div
+                                className={cn(
+                                  "text-xs tabular-nums",
+                                  d != null && d <= 30
+                                    ? "text-destructive font-semibold"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                {d != null && d < 0 ? "wygasła" : `${d} dni pozostało`}
+                              </div>
+                            </>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                          {formatPLN(b.monthlyRentNet || 0)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={b.badgeStatus} />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {(!demo || b.id.startsWith("local-")) && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => openEditContract(b)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="hidden lg:inline">Edytuj</span>
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </AppShell>
       <ContractFormDialog
         open={contractDialogOpen}

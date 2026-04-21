@@ -25,8 +25,8 @@ from app.schemas.imports import (
 
 DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "lokalizacja": [("location_address", 0.93)],
-    "l_p": [("contract_number", 0.88)],
-    "lp": [("contract_number", 0.82)],
+    "l_p": [(None, 0.05)],
+    "lp": [(None, 0.05)],
     "data_wygasniecia": [("expiry_date", 0.95), ("start_date", 0.2)],
     "koniec": [("expiry_date", 0.9)],
     "wygasa": [("expiry_date", 0.86)],

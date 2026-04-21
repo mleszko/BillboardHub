@@ -168,12 +168,10 @@ function RoadmapPage() {
 
         {/* Monetization */}
         <div className="mt-12">
-          <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
-            Plan monetyzacji
-          </h2>
+          <h2 className="text-xl font-semibold tracking-tight md:text-2xl">Plan monetyzacji</h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Beta = darmowo. W 1.0 wprowadzimy uczciwy podział Free / Pro / Enterprise.
-            Żadnych ukrytych kosztów, żadnych "trial paywalli".
+            Beta = darmowo. W 1.0 wprowadzimy uczciwy podział Free / Pro / Enterprise. Żadnych
+            ukrytych kosztów, żadnych "trial paywalli".
           </p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">

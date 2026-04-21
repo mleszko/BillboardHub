@@ -97,7 +97,11 @@ export function BillboardDetailPanel({ billboard, open, onOpenChange }: Props) {
                 label="Wyświetlenia / dzień"
                 value={billboard.dailyImpressions.toLocaleString("pl-PL")}
               />
-              <Stat icon={Calendar} label="Cena / mies." value={formatPLN(billboard.monthlyPrice)} />
+              <Stat
+                icon={Calendar}
+                label="Cena / mies."
+                value={formatPLN(billboard.monthlyPrice)}
+              />
             </div>
 
             {billboard.expiryUnknown ? (
@@ -160,8 +164,8 @@ export function BillboardDetailPanel({ billboard, open, onOpenChange }: Props) {
                     judge.tone === "success"
                       ? "border-success/40 bg-success/10 text-[oklch(0.42_0.13_155)]"
                       : judge.tone === "warning"
-                      ? "border-warning/50 bg-warning/15 text-[oklch(0.42_0.12_70)]"
-                      : "border-info/40 bg-info/10 text-info"
+                        ? "border-warning/50 bg-warning/15 text-[oklch(0.42_0.12_70)]"
+                        : "border-info/40 bg-info/10 text-info"
                   }`}
                 >
                   {judge.label}

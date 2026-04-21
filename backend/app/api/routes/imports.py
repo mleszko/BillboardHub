@@ -14,13 +14,18 @@ from app.core.database import get_db
 from app.models.models import Contract, ImportColumnMapping, ImportSession, ImportStatus
 from app.schemas.imports import (
     CANONICAL_FIELDS,
+    ImportExecuteBatchResponse,
     ImportExecuteResponse,
+    ImportMappingConfirmationBatchRequest,
     ImportInspectResponse,
     ImportInspectSheet,
     ImportMappingConfirmationRequest,
+    ImportMappingProposalBatchResponse,
     ImportMappingProposalResponse,
     ImportTemplatePreset,
     MappingProposal,
+    SheetImportExecuteItem,
+    SheetMappingProposalItem,
     REQUIRED_IMPORT_FIELDS,
 )
 from app.services.import_excel import collapse_wide_month_columns, list_excel_sheet_info, read_tabular_dataframe
@@ -33,12 +38,54 @@ from app.services.llm_gateway import chat_json_with_fallback
 router = APIRouter(prefix="/imports", tags=["imports"])
 
 PROMPT_VERSION = "v1"
+LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})
 
 
 def _to_json_safe_records(df: pd.DataFrame, limit: int | None = None) -> list[dict[str, Any]]:
     safe_df = df.head(limit) if limit is not None else df
     records = safe_df.where(pd.notna(safe_df), None).to_dict(orient="records")
     return json.loads(json.dumps(records, default=str))
+
+
+def _is_lp_like_column(source_column_name: str) -> bool:
+    normalized = (
+        source_column_name.strip().lower().replace(".", "").replace("_", " ").replace("-", " ")
+    )
+    compact = normalized.replace(" ", "")
+    return normalized in LP_COLUMN_TOKENS or compact in LP_COLUMN_TOKENS
+
+
+def _sanitize_lp_contract_number_mapping(proposals: list[MappingProposal]) -> list[MappingProposal]:
+    sanitized: list[MappingProposal] = []
+    for proposal in proposals:
+        if proposal.target_field_name == "contract_number" and _is_lp_like_column(proposal.source_column_name):
+            sanitized.append(
+                proposal.model_copy(
+                    update={
+                        "target_field_name": None,
+                        "guessed_confidence": 0.0,
+                        "guessed_rationale": "Blocked: l.p./lp cannot map to contract_number.",
+                        "is_required_target": False,
+                    }
+                )
+            )
+            continue
+        sanitized.append(proposal)
+    return sanitized
+
+
+def _normalize_sheet_names(sheet_name: str, sheet_names: list[str] | None) -> list[str]:
+    cleaned = [s.strip() for s in (sheet_names or []) if s and s.strip()]
+    if cleaned:
+        out: list[str] = []
+        seen: set[str] = set()
+        for s in cleaned:
+            if s not in seen:
+                out.append(s)
+                seen.add(s)
+        return out
+    fallback = sheet_name.strip()
+    return [fallback] if fallback else []
 
 
 def _contract_model_fields() -> list[str]:
@@ -133,7 +180,7 @@ def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[st
     settings = get_settings()
     if not settings.import_use_llm:
         proposals = heuristic_mapping_proposals(source_columns)
-        return proposals, "local-heuristics", "IMPORT_USE_LLM=false — użyto wyłącznie lokalnych heurystyk (bez wysyłki próbek do modelu)."
+        return _sanitize_lp_contract_number_mapping(proposals), "local-heuristics", "IMPORT_USE_LLM=false — użyto wyłącznie lokalnych heurystyk (bez wysyłki próbek do modelu)."
 
     fallback = _fallback_proposals(source_columns)
     contract_fields = _contract_model_fields()
@@ -149,9 +196,9 @@ def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[st
         proposals = [_proposal_from_llm_item(item) for item in parsed.get("proposals", [])]
         if not proposals:
             return fallback, used_model, "Model returned empty proposals, fallback used."
-        return proposals, used_model, None
+        return _sanitize_lp_contract_number_mapping(proposals), used_model, None
     except Exception as exc:  # noqa: BLE001
-        return fallback, "heuristic-fallback", f"LLM mapping failed, fallback used: {exc}"
+        return _sanitize_lp_contract_number_mapping(fallback), "heuristic-fallback", f"LLM mapping failed, fallback used: {exc}"
 
 
 async def generate_mapping_proposal(
@@ -160,6 +207,7 @@ async def generate_mapping_proposal(
     file: UploadFile,
     *,
     sheet_name: str = "",
+    sheet_names: list[str] | None = None,
     header_row_1based: int = 0,
     skip_rows_before_header: int = 0,
     unpivot_month_columns: bool = False,
@@ -172,54 +220,80 @@ async def generate_mapping_proposal(
     file_name = file.filename or "uploaded-file"
     lower = file_name.lower()
 
+    selected_sheets = _normalize_sheet_names(sheet_name, sheet_names)
     sheet_arg: str | int | None
     if lower.endswith(".csv"):
         sheet_arg = None
     else:
-        sheet_arg = sheet_name.strip() if sheet_name.strip() else 0
+        if len(selected_sheets) == 1:
+            sheet_arg = selected_sheets[0]
+        elif not selected_sheets:
+            sheet_arg = 0
+        else:
+            sheet_arg = 0
 
     if monthly_aggregate not in ("mean", "last", "sum_as_monthly"):
         monthly_aggregate = "mean"
 
-    adapter_result = try_known_adapter(file_name, file_bytes, sheet_name)
+    adapter_result = try_known_adapter(file_name, file_bytes, selected_sheets[0] if len(selected_sheets) == 1 else "")
     if adapter_result is not None:
         source_columns = adapter_result.source_columns
-        all_rows = adapter_result.all_rows
+        all_rows = []
+        for row in adapter_result.all_rows:
+            merged = dict(row)
+            merged["__source_sheet"] = selected_sheets[0] if selected_sheets else adapter_result.parse_options.get("resolved_sheet")
+            all_rows.append(merged)
         sample_rows = all_rows[:2]
         proposals = adapter_result.proposals
         guessed_by_model = adapter_result.guessed_by_model
         warning = adapter_result.warning
         parse_options: dict[str, object] = dict(adapter_result.parse_options)
     else:
-        df, resolved_header_1based = read_tabular_dataframe(
-            file_name,
-            file_bytes,
-            sheet_name=sheet_arg,
-            header_row_1based=header_row_1based,
-            skip_rows_before_header=max(0, skip_rows_before_header),
-        )
+        dfs: list[pd.DataFrame] = []
+        resolved_headers: dict[str, int] = {}
+        any_unpivot_applied = False
+        source_sheet_names = selected_sheets if selected_sheets else [sheet_arg]  # type: ignore[list-item]
+        for s in source_sheet_names:
+            current_sheet = s if s not in (None, "") else 0
+            df, resolved_header_1based = read_tabular_dataframe(
+                file_name,
+                file_bytes,
+                sheet_name=current_sheet,
+                header_row_1based=header_row_1based,
+                skip_rows_before_header=max(0, skip_rows_before_header),
+            )
+            if unpivot_month_columns:
+                before_cols = len(df.columns)
+                df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
+                any_unpivot_applied = any_unpivot_applied or before_cols != len(df.columns)
+            df = df.dropna(how="all")
+            resolved_name = str(current_sheet) if isinstance(current_sheet, int) else current_sheet
+            resolved_headers[resolved_name] = resolved_header_1based
+            records = _to_json_safe_records(df)
+            for row in records:
+                row["__source_sheet"] = resolved_name
+            if records:
+                dfs.append(pd.DataFrame(records))
+            elif len(source_sheet_names) == 1:
+                dfs.append(df.assign(__source_sheet=resolved_name))
 
-        unpivot_applied = False
-        if unpivot_month_columns:
-            before_cols = len(df.columns)
-            df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
-            unpivot_applied = before_cols != len(df.columns)
-
-        df = df.dropna(how="all")
-        source_columns = [str(column) for column in df.columns.tolist()]
-        sample_rows = _to_json_safe_records(df, limit=2)
-        all_rows = _to_json_safe_records(df)
-
+        merged_df = pd.concat(dfs, ignore_index=True, sort=False) if dfs else pd.DataFrame()
+        if "__source_sheet" in merged_df.columns:
+            source_columns = [str(column) for column in merged_df.columns.tolist() if str(column) != "__source_sheet"]
+        else:
+            source_columns = [str(column) for column in merged_df.columns.tolist()]
+        all_rows = _to_json_safe_records(merged_df)
+        sample_rows = all_rows[:2]
         proposals, guessed_by_model, warning = _guess_mapping_with_gpt(source_columns, sample_rows)
-
         parse_options = {
             "sheet_name": sheet_name.strip() or None,
-            "header_row_1based": resolved_header_1based,
+            "sheet_names": selected_sheets or None,
+            "header_row_1based": resolved_headers,
             "header_row_requested": header_row_1based,
             "header_auto": header_row_1based < 1,
             "skip_rows_before_header": skip_rows_before_header,
             "unpivot_month_columns": unpivot_month_columns,
-            "unpivot_applied": unpivot_applied,
+            "unpivot_applied": any_unpivot_applied,
             "monthly_aggregate": monthly_aggregate,
         }
 
@@ -314,6 +388,7 @@ def _form_bool(value: str) -> bool:
 async def guess_mapping(
     file: UploadFile = File(...),
     sheet_name: str = Form(""),
+    sheet_names: list[str] = Form([]),
     header_row_1based: int = Form(0),
     skip_rows_before_header: int = Form(0),
     unpivot_month_columns: str = Form("false"),
@@ -327,10 +402,65 @@ async def guess_mapping(
             user_id=user.user_id,
             file=file,
             sheet_name=sheet_name,
+            sheet_names=sheet_names,
             header_row_1based=header_row_1based,
             skip_rows_before_header=skip_rows_before_header,
             unpivot_month_columns=_form_bool(unpivot_month_columns),
             monthly_aggregate=monthly_aggregate,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/guess-mapping-batch", response_model=ImportMappingProposalBatchResponse)
+async def guess_mapping_batch(
+    file: UploadFile = File(...),
+    sheet_name: str = Form(""),
+    sheet_names: list[str] = Form([]),
+    header_row_1based: int = Form(0),
+    skip_rows_before_header: int = Form(0),
+    unpivot_month_columns: str = Form("false"),
+    monthly_aggregate: str = Form("mean"),
+    user: UserContext = Depends(ensure_profile),
+    db: AsyncSession = Depends(get_db),
+) -> ImportMappingProposalBatchResponse:
+    try:
+        normalized = _normalize_sheet_names(sheet_name, sheet_names)
+        if not normalized:
+            normalized = [sheet_name.strip()] if sheet_name.strip() else []
+        if not normalized:
+            normalized = [""]
+
+        all_items: list[SheetMappingProposalItem] = []
+        total_rows = 0
+        for single_sheet in normalized:
+            proposal = await generate_mapping_proposal(
+                db=db,
+                user_id=user.user_id,
+                file=UploadFile(
+                    file=io.BytesIO(await file.read()),
+                    filename=file.filename,
+                    headers=file.headers,
+                ),
+                sheet_name=single_sheet,
+                sheet_names=[single_sheet] if single_sheet else [],
+                header_row_1based=header_row_1based,
+                skip_rows_before_header=skip_rows_before_header,
+                unpivot_month_columns=_form_bool(unpivot_month_columns),
+                monthly_aggregate=monthly_aggregate,
+            )
+            total_rows += proposal.total_rows
+            all_items.append(SheetMappingProposalItem(sheet_name=single_sheet or "0", proposal=proposal))
+            await file.seek(0)
+
+        return ImportMappingProposalBatchResponse(
+            file_name=file.filename or "uploaded-file",
+            owner_user_id=user.user_id,
+            sheets=all_items,
+            total_rows=total_rows,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -358,3 +488,51 @@ async def confirm_mapping(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+@router.post("/confirm-mapping-batch", response_model=ImportExecuteBatchResponse)
+async def confirm_mapping_batch(
+    payload: ImportMappingConfirmationBatchRequest,
+    user: UserContext = Depends(ensure_profile),
+    db: AsyncSession = Depends(get_db),
+) -> ImportExecuteBatchResponse:
+    if payload.owner_user_id != user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only confirm your own import sessions.",
+        )
+
+    results: list[SheetImportExecuteItem] = []
+    total_rows = 0
+    valid_rows = 0
+    invalid_rows = 0
+    imported_rows = 0
+    errors_preview: list[dict[str, Any]] = []
+
+    for sheet_payload in payload.sheets:
+        single_request = ImportMappingConfirmationRequest(
+            session_id=sheet_payload.session_id,
+            owner_user_id=payload.owner_user_id,
+            mapping=sheet_payload.mapping,
+            sheet_overrides=sheet_payload.sheet_overrides,
+        )
+        try:
+            result = await confirm_mapping_and_import(db=db, payload=single_request)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        total_rows += result.total_rows
+        valid_rows += result.valid_rows
+        invalid_rows += result.invalid_rows
+        imported_rows += result.imported_rows
+        errors_preview.extend(result.errors_preview or [])
+        results.append(SheetImportExecuteItem(sheet_name=sheet_payload.sheet_name, result=result))
+
+    return ImportExecuteBatchResponse(
+        owner_user_id=payload.owner_user_id,
+        total_rows=total_rows,
+        valid_rows=valid_rows,
+        invalid_rows=invalid_rows,
+        imported_rows=imported_rows,
+        sheets=results,
+        errors_preview=errors_preview[:10],
+    )
