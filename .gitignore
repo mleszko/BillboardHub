@@ -6,7 +6,6 @@
 .env.production.local
 backend/.env.example
 backend/.env
-frontend/.env.example
 
 # Logs
 logs
@@ -25,8 +24,6 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
-frontend/.next
-frontend/node_modules
 backend/.venv
 backend/__pycache__
 backend/**/*.pyc

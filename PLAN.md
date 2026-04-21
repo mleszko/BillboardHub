@@ -42,7 +42,7 @@ To enable uninterrupted delivery, work will proceed under the following operatin
 ## Phase 1 — Setup & Auth (Foundation First)
 
 ### Goals
-- Establish monorepo structure: `frontend/`, `backend/`, `infra/`.
+- Establish monorepo structure around root Vite app + `backend/` + `infra/`.
 - Prepare deployment-ready local development using Docker.
 - Integrate Supabase Auth (email/password) and tenancy foundations.
 - Enforce the two-runtime-modes contract:
@@ -50,7 +50,7 @@ To enable uninterrupted delivery, work will proceed under the following operatin
   - **Demo Mode**: feature-flagged showcase capabilities.
 
 ### Deliverables
-- Next.js 14 app bootstrapped in `frontend/` with App Router, Tailwind, Shadcn/UI, Lucide.
+- Root Vite app with Tailwind, Shadcn/UI, Lucide.
 - FastAPI app bootstrapped in `backend/` with async SQLAlchemy and Alembic migrations.
 - Environment configuration templates (`.env.example`) for OpenAI + Supabase + DB.
 - Core DB schema migrated to Supabase Postgres (contracts + imports + advisor tables).

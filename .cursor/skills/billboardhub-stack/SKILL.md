@@ -1,7 +1,7 @@
 ---
 name: billboardhub-stack
 description: >-
-  BillboardHub monorepo layout, dev commands, and where backend vs TanStack vs Next.js
+  BillboardHub monorepo layout, dev commands, and where backend vs Vite/TanStack
   live. Use when onboarding, running tests, or deciding which package.json or folder to touch.
 ---
 
@@ -11,8 +11,7 @@ description: >-
 
 - **Root**: TanStack Start + Vite app (`src/`, `vite.config.ts`, `npm run dev`).
 - **backend/**: FastAPI (`app.main:app`), SQLAlchemy async, SQLite default; `requirements.txt`, `.venv`.
-- **frontend/**: Next.js 14 (optional path); separate `package.json`.
-- **infra/**: `docker-compose.yml` for backend + Next image.
+- **infra/**: deployment and compose support.
 
 ## Common commands
 

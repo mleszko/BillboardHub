@@ -3,17 +3,13 @@
 BillboardHub is evolving from a quick mock into a production-ready SaaS for billboard contract management.
 
 This repository currently contains:
-- legacy mock UI (TanStack app in repo root),
-- new production structure:
-  - `frontend/` (Next.js 14 App Router)
-  - `backend/` (FastAPI + SQLAlchemy async)
-  - `infra/` (Docker compose and deployment support)
+- active UI (TanStack + Vite app in repo root),
+- `backend/` (FastAPI + SQLAlchemy async),
+- `infra/` (Docker compose and deployment support).
 
 ## Production Architecture
 
-- **Frontend**: Next.js 14, Tailwind CSS, mode-separated UX:
-  - **Auth Mode**: stable, minimal contracts operations
-  - **Demo Mode**: Hubert advisor and showcase features
+- **Frontend**: Vite + TanStack app in repo root
 - **Backend**: FastAPI, async SQLAlchemy, PostgreSQL-ready (Supabase in production)
 - **Auth**: Supabase Auth (email/password)
 - **AI**:
@@ -53,7 +49,7 @@ docker compose -f infra/docker-compose.yml up --build
 ```
 
 Services:
-- frontend: http://localhost:3000
+- frontend: http://localhost:5173
 - backend: http://localhost:8000
 
 ### Option B: Run manually
@@ -67,9 +63,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Frontend:
 ```bash
-cd frontend
 npm install
-npm run dev
+npm run dev:frontend
 ```
 
 ### One-command start (frontend + backend)
@@ -85,7 +80,6 @@ Additional helper scripts:
 ```bash
 npm run dev:frontend
 npm run dev:backend
-npm run dev:all:next
 ```
 
 Quality checks:
@@ -103,8 +97,7 @@ Git commit hook (no push) runs automatically via Husky and executes:
 - backend tests (`npm run test:backend`, Pytest)
 
 Notes:
-- `dev:all` uses the legacy Lovable/Vite frontend at `http://localhost:5173`.
-- `dev:all:next` uses the Next.js frontend from `frontend/` at `http://localhost:3000`.
+- `dev:all` runs the active Vite frontend at `http://localhost:5173` and backend at `http://localhost:8000`.
 
 ## Environment Setup
 
@@ -114,15 +107,6 @@ Copy from `backend/.env.example` and configure:
 - `OPENAI_API_KEY`
 - `SUPABASE_JWT_SECRET`
 - `ALLOWED_ORIGINS`
-
-### Frontend (`frontend/.env.local`)
-Copy from `frontend/.env.example`:
-- `NEXT_PUBLIC_BACKEND_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_DEFAULT_MODE`
-
-## Deployment Plan
 
 ## Supabase (DB + Auth)
 1. Create project in Supabase.
@@ -144,12 +128,9 @@ Copy from `frontend/.env.example`:
 5. Attach Supabase Postgres URL as `DATABASE_URL`.
 6. Set `ALLOWED_ORIGINS` to your Vercel frontend URL.
 
-## Vercel (Next.js frontend)
-1. Import repository into Vercel.
-2. Set root directory to `frontend`.
-3. Configure env vars from `frontend/.env.example`.
-4. Set `NEXT_PUBLIC_BACKEND_URL` to Railway backend public URL.
-5. Deploy.
+## Frontend deployment
+Deploy the root Vite app to your preferred static host (Cloudflare Pages, Netlify, Vercel static).
+Set backend URL env var according to `src/lib/backend-auth.ts` / Vite env usage.
 
 ## GitHub Automation (CI/CD)
 
@@ -162,7 +143,7 @@ This repo now includes GitHub Actions workflows:
 - `/.github/workflows/deploy.yml`
   - runs on push to `main` (and manual dispatch)
   - deploys backend to Railway **if** Railway secrets are present
-  - deploys frontend to Vercel **if** Vercel secrets are present
+  - deploys frontend to configured static host **if** host secrets are present
 
 ### Required GitHub Secrets
 
@@ -170,10 +151,7 @@ For Railway auto-deploy:
 - `RAILWAY_TOKEN`
 - `RAILWAY_SERVICE_ID`
 
-For Vercel auto-deploy:
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
+For frontend auto-deploy: set host-specific secrets used by your workflow.
 
 If secrets are missing, deploy jobs are skipped safely.
 
@@ -183,18 +161,17 @@ For your current stage (demo + likely one user), this setup is realistic on free
 
 - **Supabase Free**: DB + Auth
 - **Railway**: backend service (watch monthly usage limits/sleep behavior)
-- **Vercel Hobby**: frontend
+- **Static frontend host**: Vite build output
 
 Recommended rollout:
 1. Configure Supabase project and env values.
 2. Deploy backend on Railway once manually to verify env wiring.
-3. Deploy frontend on Vercel once manually.
+3. Deploy frontend static build once manually.
 4. Add the GitHub secrets above.
 5. Merge to `main` and let workflows handle auto-test + auto-deploy.
 
 Important: free tiers can throttle/sleep; acceptable for demo but not for strict uptime SLAs.
 
-## Notes on Existing Mock
+## Notes
 
-The original mock app is still present in the repository root and has not been deleted.
-The new production app lives under `frontend/` and `backend/` and can be developed independently while preserving legacy artifacts for reference.
+The active app lives in the repository root (`src/`) with backend in `backend/`.
