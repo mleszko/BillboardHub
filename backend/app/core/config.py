@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "BillboardHub API"
     app_env: str = "development"
     app_mode_default: str = "auth"
-    allowed_origins: str = "http://localhost:3000"
+    allowed_origins: str = "http://localhost:5173"
 
     # For local development we default to SQLite. In production use Supabase Postgres.
     database_url: str = "sqlite+aiosqlite:///./billboardhub.db"
