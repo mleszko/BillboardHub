@@ -75,6 +75,11 @@ def test_golden_workbook_imports_with_auto_header() -> None:
         proposal = guess.json()
         assert proposal.get("parse_options", {}).get("header_auto") is True
         assert proposal["columns"]
+        parse_options = proposal.get("parse_options", {}) or {}
+        if parse_options.get("adapter_id") == "known_workbook_v1":
+            assert parse_options.get("adapter_version") == 1
+            assert isinstance(parse_options.get("header_fingerprint"), str)
+            assert proposal.get("guessed_by_model") == "adapter:known_workbook_v1"
 
         owner_id = proposal["owner_user_id"]
         payload = {

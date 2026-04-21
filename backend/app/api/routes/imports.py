@@ -25,6 +25,7 @@ from app.schemas.imports import (
 )
 from app.services.import_excel import collapse_wide_month_columns, list_excel_sheet_info, read_tabular_dataframe
 from app.services.import_guesser import heuristic_mapping_proposals
+from app.services.import_adapters import try_known_adapter
 from app.services.import_processor import confirm_mapping_and_import
 from app.services.import_templates import IMPORT_TEMPLATE_PRESETS
 from app.services.llm_gateway import chat_json_with_fallback
@@ -180,50 +181,61 @@ async def generate_mapping_proposal(
     if monthly_aggregate not in ("mean", "last", "sum_as_monthly"):
         monthly_aggregate = "mean"
 
-    df, resolved_header_1based = read_tabular_dataframe(
-        file_name,
-        file_bytes,
-        sheet_name=sheet_arg,
-        header_row_1based=header_row_1based,
-        skip_rows_before_header=max(0, skip_rows_before_header),
-    )
+    adapter_result = try_known_adapter(file_name, file_bytes, sheet_name)
+    if adapter_result is not None:
+        source_columns = adapter_result.source_columns
+        all_rows = adapter_result.all_rows
+        sample_rows = all_rows[:2]
+        proposals = adapter_result.proposals
+        guessed_by_model = adapter_result.guessed_by_model
+        warning = adapter_result.warning
+        parse_options: dict[str, object] = dict(adapter_result.parse_options)
+    else:
+        df, resolved_header_1based = read_tabular_dataframe(
+            file_name,
+            file_bytes,
+            sheet_name=sheet_arg,
+            header_row_1based=header_row_1based,
+            skip_rows_before_header=max(0, skip_rows_before_header),
+        )
 
-    unpivot_applied = False
-    if unpivot_month_columns:
-        before_cols = len(df.columns)
-        df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
-        unpivot_applied = before_cols != len(df.columns)
+        unpivot_applied = False
+        if unpivot_month_columns:
+            before_cols = len(df.columns)
+            df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
+            unpivot_applied = before_cols != len(df.columns)
 
-    df = df.dropna(how="all")
-    source_columns = [str(column) for column in df.columns.tolist()]
-    sample_rows = _to_json_safe_records(df, limit=2)
+        df = df.dropna(how="all")
+        source_columns = [str(column) for column in df.columns.tolist()]
+        sample_rows = _to_json_safe_records(df, limit=2)
+        all_rows = _to_json_safe_records(df)
 
-    proposals, guessed_by_model, warning = _guess_mapping_with_gpt(source_columns, sample_rows)
+        proposals, guessed_by_model, warning = _guess_mapping_with_gpt(source_columns, sample_rows)
 
-    parse_options: dict[str, object] = {
-        "sheet_name": sheet_name.strip() or None,
-        "header_row_1based": resolved_header_1based,
-        "header_row_requested": header_row_1based,
-        "header_auto": header_row_1based < 1,
-        "skip_rows_before_header": skip_rows_before_header,
-        "unpivot_month_columns": unpivot_month_columns,
-        "unpivot_applied": unpivot_applied,
-        "monthly_aggregate": monthly_aggregate,
-    }
+        parse_options = {
+            "sheet_name": sheet_name.strip() or None,
+            "header_row_1based": resolved_header_1based,
+            "header_row_requested": header_row_1based,
+            "header_auto": header_row_1based < 1,
+            "skip_rows_before_header": skip_rows_before_header,
+            "unpivot_month_columns": unpivot_month_columns,
+            "unpivot_applied": unpivot_applied,
+            "monthly_aggregate": monthly_aggregate,
+        }
 
     import_session = ImportSession(
         owner_user_id=user_id,
         original_file_name=file_name,
         file_type="xlsx" if lower.endswith((".xlsx", ".xls")) else "csv",
         status=ImportStatus.mapped,
-        total_rows=int(len(df.index)),
+        total_rows=int(len(all_rows)),
         llm_model=guessed_by_model,
         llm_prompt_version=PROMPT_VERSION,
         storage_path=json.dumps(
             {
                 "source_columns": source_columns,
                 "sample_rows": sample_rows,
-                "all_rows": _to_json_safe_records(df),
+                "all_rows": all_rows,
                 "parse_options": parse_options,
             },
             ensure_ascii=False,

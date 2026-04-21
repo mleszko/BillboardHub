@@ -51,3 +51,26 @@ def test_create_and_patch_contract() -> None:
         assert updated["advertiser_name"] == "Inny klient"
         assert updated["expiry_date"] == "2030-06-15"
         assert updated["expiry_unknown"] is False
+
+
+def test_delete_all_contracts_only_for_current_user() -> None:
+    with TestClient(app) as client:
+        client.get("/health")
+        user_a = {"x-dev-user-id": "bulk-delete-a", "x-dev-user-email": "a@billboardhub.test"}
+        user_b = {"x-dev-user-id": "bulk-delete-b", "x-dev-user-email": "b@billboardhub.test"}
+
+        create_a = client.post("/contracts", headers=user_a, json={"advertiser_name": "A1", "expiry_unknown": True})
+        assert create_a.status_code == 201, create_a.text
+        create_b = client.post("/contracts", headers=user_b, json={"advertiser_name": "B1", "expiry_unknown": True})
+        assert create_b.status_code == 201, create_b.text
+
+        delete_all = client.delete("/contracts", headers=user_a)
+        assert delete_all.status_code == 204, delete_all.text
+
+        list_a = client.get("/contracts", headers=user_a)
+        assert list_a.status_code == 200, list_a.text
+        assert list_a.json()["items"] == []
+
+        list_b = client.get("/contracts", headers=user_b)
+        assert list_b.status_code == 200, list_b.text
+        assert len(list_b.json()["items"]) == 1

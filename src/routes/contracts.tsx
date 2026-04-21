@@ -159,9 +159,7 @@ function ContractDetailDialog({
   onEditRequest?: () => void;
 }) {
   if (!row) return null;
-  const months = row.expiryUnknown
-    ? 0
-    : billingMonthsCount(row.contractStart, row.contractEnd);
+  const months = row.expiryUnknown ? 0 : billingMonthsCount(row.contractStart, row.contractEnd);
   const schedule = buildPaymentSchedule(row.contractStart, row.contractEnd, row.monthlyPrice);
   const scheduleTotal = schedule.reduce((s, m) => s + m.amount, 0);
   const usesStoredTotal = row.totalContractValue != null && row.totalContractValue > 0;
@@ -194,8 +192,8 @@ function ContractDetailDialog({
             <dd>
               {row.expiryUnknown ? (
                 <span className="text-muted-foreground">
-                  Brak daty wygaśnięcia w pliku źródłowym — dodaj kolumnę z datą w imporcie lub uzupełnij
-                  ręcznie.
+                  Brak daty wygaśnięcia w pliku źródłowym — dodaj kolumnę z datą w imporcie lub
+                  uzupełnij ręcznie.
                 </span>
               ) : row.contractStart ? (
                 <>
@@ -300,6 +298,8 @@ function ContractsPage() {
   const [detailRow, setDetailRow] = useState<ContractRow | null>(null);
   const [deleteRow, setDeleteRow] = useState<ContractRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteAllBusy, setDeleteAllBusy] = useState(false);
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
   const [contractDialogMode, setContractDialogMode] = useState<"create" | "edit">("create");
   const [contractDialogInitial, setContractDialogInitial] = useState<ContractFormValues | null>(
@@ -341,19 +341,13 @@ function ContractsPage() {
       const mapped: ContractRow[] = items.map((item) => ({
         id: item.id,
         code:
-          item.contract_number ||
-          item.billboard_code ||
-          `CTR-${item.id.slice(0, 8).toUpperCase()}`,
+          item.contract_number || item.billboard_code || `CTR-${item.id.slice(0, 8).toUpperCase()}`,
         client: item.advertiser_name,
         city: item.city || "—",
         address: item.location_address || "—",
         size: item.surface_size?.trim() || "—",
         monthlyPrice: monthly(item),
-        status: statusFromBackend(
-          item.contract_status,
-          item.expiry_date,
-          item.expiry_unknown,
-        ),
+        status: statusFromBackend(item.contract_status, item.expiry_date, item.expiry_unknown),
         contractStart: item.start_date,
         contractEnd: item.expiry_date,
         expiryUnknown: Boolean(item.expiry_unknown),
@@ -412,6 +406,30 @@ function ContractsPage() {
       setDeleteBusy(false);
     }
   }, [deleteRow, demo, reloadBackendRows]);
+
+  const confirmDeleteAllContracts = useCallback(async () => {
+    if (demo) return;
+    setDeleteAllBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts`, {
+        method: "DELETE",
+        headers: await getBackendAuthHeaders(),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się usunąć wszystkich billboardów.");
+      }
+      toast.success("Usunięto wszystkie billboardy.");
+      setDeleteAllOpen(false);
+      setDetailRow(null);
+      setDeleteRow(null);
+      await reloadBackendRows();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Błąd usuwania.");
+    } finally {
+      setDeleteAllBusy(false);
+    }
+  }, [demo, reloadBackendRows]);
 
   const openNewContract = () => {
     setContractDialogMode("create");
@@ -523,6 +541,18 @@ function ContractsPage() {
               <span className="sm:hidden">Import</span>
             </Link>
           </Button>
+          {!demo && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="gap-1.5"
+              onClick={() => setDeleteAllOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Usuń wszystkie billboardy</span>
+              <span className="sm:hidden">Usuń wszystkie</span>
+            </Button>
+          )}
         </div>
       }
     >
@@ -573,6 +603,32 @@ function ContractsPage() {
                 onClick={() => void confirmDeleteContract()}
               >
                 {deleteBusy ? "Usuwanie…" : "Usuń"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={deleteAllOpen}
+          onOpenChange={(open) => {
+            if (!open && !deleteAllBusy) setDeleteAllOpen(false);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Usunąć wszystkie billboardy?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Ta operacja usunie wszystkie kontrakty z Twojego portfela i nie można jej cofnąć.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteAllBusy}>Anuluj</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={deleteAllBusy}
+                onClick={() => void confirmDeleteAllContracts()}
+              >
+                {deleteAllBusy ? "Usuwanie…" : "Usuń wszystko"}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -672,12 +728,9 @@ function ContractsPage() {
           {rows.map((b) => {
             const d = b.expiryUnknown
               ? null
-              : Math.ceil(
-                  (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-                );
+              : Math.ceil((new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
             const total = 365;
-            const progress =
-              d == null ? 0 : Math.max(0, Math.min(100, (d / total) * 100));
+            const progress = d == null ? 0 : Math.max(0, Math.min(100, (d / total) * 100));
             return (
               <Card key={b.id}>
                 <CardContent className="space-y-3 p-4">
@@ -768,12 +821,10 @@ function ContractsPage() {
                   const d = b.expiryUnknown
                     ? null
                     : Math.ceil(
-                        (new Date(b.contractEnd).getTime() - Date.now()) /
-                          (1000 * 60 * 60 * 24),
+                        (new Date(b.contractEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
                       );
                   const total = 365;
-                  const progress =
-                    d == null ? 0 : Math.max(0, Math.min(100, (d / total) * 100));
+                  const progress = d == null ? 0 : Math.max(0, Math.min(100, (d / total) * 100));
                   return (
                     <tr key={b.id} className="transition-colors hover:bg-accent/40">
                       <td className="px-4 py-3 font-mono text-xs font-semibold">{b.code}</td>
@@ -796,11 +847,7 @@ function ContractsPage() {
                       <td className="px-4 py-3">
                         <div className="mb-1 flex justify-between text-[11px]">
                           <span className="text-muted-foreground">
-                            {b.expiryUnknown
-                              ? "—"
-                              : d != null && d < 0
-                                ? "wygasła"
-                                : `${d} dni`}
+                            {b.expiryUnknown ? "—" : d != null && d < 0 ? "wygasła" : `${d} dni`}
                           </span>
                         </div>
                         {!b.expiryUnknown ? <Progress value={progress} className="h-1.5" /> : null}
