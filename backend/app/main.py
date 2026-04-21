@@ -29,9 +29,12 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_profile_router)
 app.include_router(imports_router)
+# Some proxies / clients use an /api prefix; mirror import routes there too.
+app.include_router(imports_router, prefix="/api", include_in_schema=False)
 app.include_router(hubert_router)
 app.include_router(contracts_router)
 app.include_router(custom_columns_router)
+app.include_router(contracts_router, prefix="/api", include_in_schema=False)
 
 
 @app.on_event("startup")

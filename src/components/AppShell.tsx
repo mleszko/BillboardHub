@@ -22,6 +22,7 @@ interface AppShellProps {
 type ContractsResponse = {
   items: Array<{
     expiry_date: string;
+    expiry_unknown?: boolean;
   }>;
 };
 
@@ -51,6 +52,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
         const payload = (await response.json()) as ContractsResponse;
         const now = Date.now();
         const expiring30 = (payload.items ?? []).filter((item) => {
+          if (item.expiry_unknown) return false;
           const days = Math.ceil(
             (new Date(item.expiry_date).getTime() - now) / (1000 * 60 * 60 * 24),
           );

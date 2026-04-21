@@ -25,6 +25,7 @@ interface ContractsResponse {
     advertiser_name: string;
     city: string | null;
     expiry_date: string;
+    expiry_unknown?: boolean;
     contract_status: string;
     monthly_rent_net: number | null;
   }>;
@@ -147,11 +148,15 @@ export function HubertWidget() {
         const items = payload.items ?? [];
         const withDays = items.map((item) => ({
           ...item,
-          days: Math.ceil((new Date(item.expiry_date).getTime() - now) / (1000 * 60 * 60 * 24)),
+          days: item.expiry_unknown
+            ? Number.POSITIVE_INFINITY
+            : Math.ceil((new Date(item.expiry_date).getTime() - now) / (1000 * 60 * 60 * 24)),
         }));
-        const expiring30 = withDays.filter((i) => i.days <= 30).length;
-        const topExpiring = withDays.filter((i) => i.days >= 0).sort((a, b) => a.days - b.days)[0];
-        const monthlyRevenue = withDays.reduce((sum, i) => sum + (i.monthly_rent_net || 0), 0);
+        const expiring30 = withDays.filter((i) => !i.expiry_unknown && i.days <= 30).length;
+        const topExpiring = withDays
+          .filter((i) => !i.expiry_unknown && i.days >= 0)
+          .sort((a, b) => a.days - b.days)[0];
+        const monthlyRevenue = items.reduce((sum, i) => sum + (i.monthly_rent_net || 0), 0);
         const occupancy = items.length > 0 ? 100 : 0;
         setLiveSummary({
           total: items.length,

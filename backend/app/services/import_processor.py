@@ -8,15 +8,28 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
+from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
+from app.core.config import get_settings
+from app.models.models import BillboardType, Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
 from app.schemas.imports import ImportExecuteResponse, ImportMappingConfirmationRequest
 from app.services.custom_columns import compute_active_columns_for_contracts
+from app.services.import_excel import is_noise_import_row, is_probable_summary_raw_row
 from app.services.import_guesser import parse_date, parse_decimal
+from app.services.llm_gateway import chat_json_with_fallback
+
+MISSING_ADVERTISER_PLACEHOLDER = "DO_UZUPELNIENIA"
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
     date_fields = {"start_date", "expiry_date"}
-    decimal_fields = {"latitude", "longitude", "monthly_rent_net", "monthly_rent_gross", "vat_rate"}
+    decimal_fields = {
+        "latitude",
+        "longitude",
+        "monthly_rent_net",
+        "monthly_rent_gross",
+        "total_contract_value_net",
+        "vat_rate",
+    }
 
     if target_field_name in date_fields:
         return parse_date(value)
@@ -47,8 +60,122 @@ def _to_decimal(value: Any) -> Decimal | None:
         return None
 
 
+def _clean_party_field(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        s = value.strip()
+        if not s or s in {"?", "-", "—", "..", "…"}:
+            return None
+        return s
+    return value
+
+
+def _coerce_billboard_type(raw: Any) -> BillboardType:
+    if raw is None or raw == "":
+        return BillboardType.other
+    if isinstance(raw, BillboardType):
+        return raw
+    s = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
+    aliases = {
+        "led": BillboardType.led,
+        "citylight": BillboardType.citylight,
+        "city_light": BillboardType.citylight,
+        "backlight": BillboardType.backlight,
+        "backlit": BillboardType.backlight,
+        "classic": BillboardType.classic,
+        "inny": BillboardType.other,
+        "other": BillboardType.other,
+    }
+    if s in aliases:
+        return aliases[s]
+    try:
+        return BillboardType(s)
+    except ValueError:
+        return BillboardType.other
+
+
 def _to_json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, default=str))
+
+
+def _raw_row_excerpt(raw_row: dict[str, Any], max_items: int = 4) -> dict[str, Any]:
+    excerpt: dict[str, Any] = {}
+    for key, value in raw_row.items():
+        if value is None:
+            continue
+        s = str(value).strip()
+        if not s:
+            continue
+        excerpt[str(key)] = s
+        if len(excerpt) >= max_items:
+            break
+    return excerpt
+
+
+def _norm_key(value: Any) -> str | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s.lower() if s else None
+
+
+def _dedupe_key(normalized_payload: dict[str, Any]) -> tuple[str, str] | None:
+    contract_number = _norm_key(normalized_payload.get("contract_number"))
+    if contract_number:
+        return ("contract_number", contract_number)
+    billboard_code = _norm_key(normalized_payload.get("billboard_code"))
+    if billboard_code:
+        return ("billboard_code", billboard_code)
+    advertiser = _norm_key(normalized_payload.get("advertiser_name"))
+    city = _norm_key(normalized_payload.get("city"))
+    address = _norm_key(normalized_payload.get("location_address"))
+    expiry = _norm_key(normalized_payload.get("expiry_date"))
+    if advertiser and city and address and expiry:
+        return ("composite_v1", f"{advertiser}|{city}|{address}|{expiry}")
+    return None
+
+
+def _attempt_llm_row_repair(
+    *,
+    raw_row: dict[str, Any],
+    normalized_payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.import_llm_row_repair:
+        return None
+    system_prompt = (
+        "You repair a single import row. Return strict JSON with object key 'patch'. "
+        "Allowed patch keys: advertiser_name, expiry_date. "
+        "Use null when unsure and never return extra keys."
+    )
+    user_prompt = json.dumps(
+        {
+            "raw_row": raw_row,
+            "normalized_payload": normalized_payload,
+            "required_fields": ["advertiser_name", "expiry_date"],
+            "output_schema": {"patch": {"advertiser_name": "string|null", "expiry_date": "string|null"}},
+        },
+        ensure_ascii=False,
+    )
+    try:
+        payload, _ = chat_json_with_fallback(
+            use_case="import",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.0,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    patch = payload.get("patch")
+    if not isinstance(patch, dict):
+        return None
+    repaired: dict[str, Any] = {}
+    if "advertiser_name" in patch:
+        repaired["advertiser_name"] = _clean_party_field(patch.get("advertiser_name"))
+    if "expiry_date" in patch:
+        repaired["expiry_date"] = parse_date(patch.get("expiry_date"))
+    return repaired
 
 
 async def confirm_mapping_and_import(
@@ -79,11 +206,6 @@ async def confirm_mapping_and_import(
         mapped.transform_hint = proposed.transform_hint
 
     session.status = ImportStatus.confirmed
-    required_targets = {"advertiser_name", "expiry_date"}
-    selected_targets = {item.target_field_name for item in payload.mapping if item.target_field_name}
-    missing_targets = required_targets.difference(selected_targets)
-    if missing_targets:
-        raise ValueError(f"Missing required mapped fields: {', '.join(sorted(missing_targets))}")
 
     await db.execute(delete(ImportRow).where(ImportRow.import_session_id == payload.session_id))
 
@@ -103,9 +225,29 @@ async def confirm_mapping_and_import(
         raise ValueError("Import session has no parsed source rows. Re-upload the file and try again.")
 
     contracts_to_create: list[Contract] = []
+    contracts_to_update: list[Contract] = []
     invalid_preview: list[dict[str, Any]] = []
     valid_rows = 0
     invalid_rows = 0
+    llm_repairs_used = 0
+    llm_repair_limit = 25
+    existing_contracts = (
+        await db.execute(select(Contract).where(Contract.owner_user_id == payload.owner_user_id))
+    ).scalars().all()
+    existing_by_key: dict[tuple[str, str], Contract] = {}
+    for contract in existing_contracts:
+        contract_number_key = _norm_key(contract.contract_number)
+        if contract_number_key:
+            existing_by_key[("contract_number", contract_number_key)] = contract
+        billboard_code_key = _norm_key(contract.billboard_code)
+        if billboard_code_key:
+            existing_by_key[("billboard_code", billboard_code_key)] = contract
+        advertiser_key = _norm_key(contract.advertiser_name)
+        city_key = _norm_key(contract.city)
+        address_key = _norm_key(contract.location_address)
+        expiry_key = _norm_key(contract.expiry_date.isoformat() if contract.expiry_date else None)
+        if advertiser_key and city_key and address_key and expiry_key:
+            existing_by_key[("composite_v1", f"{advertiser_key}|{city_key}|{address_key}|{expiry_key}")] = contract
 
     for row_index, raw_row in enumerate(source_rows, start=1):
         if not isinstance(raw_row, dict):
@@ -123,10 +265,47 @@ async def confirm_mapping_and_import(
                 normalized_value = parse_date(raw_value)
             normalized_payload[target_field] = normalized_value
 
+        normalized_payload["advertiser_name"] = _clean_party_field(normalized_payload.get("advertiser_name"))
+        normalized_payload["property_owner_name"] = _clean_party_field(normalized_payload.get("property_owner_name"))
+        advertiser_fallback_applied = False
+
+        if not normalized_payload.get("advertiser_name") and normalized_payload.get("property_owner_name"):
+            normalized_payload["advertiser_name"] = normalized_payload["property_owner_name"]
+            advertiser_fallback_applied = True
         if not normalized_payload.get("advertiser_name"):
-            validation_errors.append({"field": "advertiser_name", "reason": "Required field missing"})
+            normalized_payload["advertiser_name"] = MISSING_ADVERTISER_PLACEHOLDER
+            advertiser_fallback_applied = True
+
+        if not normalized_payload.get("expiry_date"):
+            normalized_payload["expiry_date"] = PLACEHOLDER_CONTRACT_EXPIRY
+
+        if is_probable_summary_raw_row(raw_row):
+            validation_errors.append(
+                {"field": "row", "reason": "Wiersz pominięty (RAZEM/SUMA lub pusty)."}
+            )
         if not normalized_payload.get("expiry_date"):
             validation_errors.append({"field": "expiry_date", "reason": "Required field missing or invalid date"})
+        if is_noise_import_row(normalized_payload):
+            validation_errors.append(
+                {"field": "row", "reason": "Wiersz pominięty (suma częściowa, nagłówek grupy lub pusty klient)."}
+            )
+
+        needs_repair = any(err["field"] in {"advertiser_name", "expiry_date"} for err in validation_errors)
+        if needs_repair and llm_repairs_used < llm_repair_limit:
+            repaired = _attempt_llm_row_repair(raw_row=raw_row, normalized_payload=normalized_payload)
+            if repaired:
+                llm_repairs_used += 1
+                if repaired.get("advertiser_name"):
+                    normalized_payload["advertiser_name"] = repaired["advertiser_name"]
+                if repaired.get("expiry_date"):
+                    normalized_payload["expiry_date"] = repaired["expiry_date"]
+                validation_errors = []
+                if not normalized_payload.get("expiry_date"):
+                    validation_errors.append({"field": "expiry_date", "reason": "Required field missing or invalid date"})
+                if is_noise_import_row(normalized_payload):
+                    validation_errors.append(
+                        {"field": "row", "reason": "Wiersz pominięty (suma częściowa, nagłówek grupy lub pusty klient)."}
+                    )
 
         row_status = ImportRowStatus.invalid if validation_errors else ImportRowStatus.valid
         import_row = ImportRow(
@@ -143,12 +322,58 @@ async def confirm_mapping_and_import(
         if validation_errors:
             invalid_rows += 1
             if len(invalid_preview) < 10:
-                invalid_preview.append({"row": row_index, "errors": validation_errors})
+                invalid_preview.append(
+                    {"row": row_index, "errors": validation_errors, "raw_excerpt": _raw_row_excerpt(raw_row)}
+                )
             continue
 
         valid_rows += 1
-        contracts_to_create.append(
-            Contract(
+        key = _dedupe_key(normalized_payload)
+        existing_contract = existing_by_key.get(key) if key else None
+
+        if existing_contract is not None:
+            existing_contract.source_file_name = session.original_file_name
+            existing_contract.source_row_number = row_index
+            existing_contract.contract_number = normalized_payload.get("contract_number")
+            existing_contract.advertiser_name = normalized_payload.get("advertiser_name")
+            existing_contract.property_owner_name = normalized_payload.get("property_owner_name")
+            existing_contract.billboard_code = normalized_payload.get("billboard_code")
+            existing_contract.billboard_type = _coerce_billboard_type(normalized_payload.get("billboard_type"))
+            existing_contract.surface_size = normalized_payload.get("surface_size")
+            existing_contract.location_address = normalized_payload.get("location_address")
+            existing_contract.city = normalized_payload.get("city")
+            existing_contract.latitude = _to_decimal(normalized_payload.get("latitude"))
+            existing_contract.longitude = _to_decimal(normalized_payload.get("longitude"))
+            existing_contract.start_date = normalized_payload.get("start_date")
+            existing_contract.expiry_date = _to_date(normalized_payload.get("expiry_date"))
+            existing_contract.monthly_rent_net = _to_decimal(normalized_payload.get("monthly_rent_net"))
+            existing_contract.monthly_rent_gross = _to_decimal(normalized_payload.get("monthly_rent_gross"))
+            existing_contract.total_contract_value_net = _to_decimal(normalized_payload.get("total_contract_value_net"))
+            existing_contract.currency = normalized_payload.get("currency") or "PLN"
+            existing_contract.vat_rate = _to_decimal(normalized_payload.get("vat_rate"))
+            existing_contract.contact_person = normalized_payload.get("contact_person")
+            existing_contract.contact_phone = normalized_payload.get("contact_phone")
+            existing_contract.contact_email = normalized_payload.get("contact_email")
+            existing_contract.notes = normalized_payload.get("notes")
+            contracts_to_update.append(existing_contract)
+            refreshed_key = _dedupe_key(normalized_payload)
+            if refreshed_key:
+                existing_by_key[refreshed_key] = existing_contract
+            if advertiser_fallback_applied and len(invalid_preview) < 10:
+                invalid_preview.append(
+                    {
+                        "row": row_index,
+                        "errors": [
+                            {
+                                "field": "advertiser_name",
+                                "reason": "Missing mapping/value filled automatically.",
+                            }
+                        ],
+                        "raw_excerpt": _raw_row_excerpt(raw_row),
+                    }
+                )
+        else:
+            contract = Contract(
                 owner_user_id=session.owner_user_id,
                 source_file_name=session.original_file_name,
                 source_row_number=row_index,
@@ -156,7 +381,8 @@ async def confirm_mapping_and_import(
                 advertiser_name=normalized_payload.get("advertiser_name"),
                 property_owner_name=normalized_payload.get("property_owner_name"),
                 billboard_code=normalized_payload.get("billboard_code"),
-                billboard_type=normalized_payload.get("billboard_type") or "other",
+                billboard_type=_coerce_billboard_type(normalized_payload.get("billboard_type")),
+                surface_size=normalized_payload.get("surface_size"),
                 location_address=normalized_payload.get("location_address"),
                 city=normalized_payload.get("city"),
                 latitude=_to_decimal(normalized_payload.get("latitude")),
@@ -165,11 +391,31 @@ async def confirm_mapping_and_import(
                 expiry_date=_to_date(normalized_payload.get("expiry_date")),
                 monthly_rent_net=_to_decimal(normalized_payload.get("monthly_rent_net")),
                 monthly_rent_gross=_to_decimal(normalized_payload.get("monthly_rent_gross")),
+                total_contract_value_net=_to_decimal(normalized_payload.get("total_contract_value_net")),
                 currency=normalized_payload.get("currency") or "PLN",
                 vat_rate=_to_decimal(normalized_payload.get("vat_rate")),
+                contact_person=normalized_payload.get("contact_person"),
+                contact_phone=normalized_payload.get("contact_phone"),
+                contact_email=normalized_payload.get("contact_email"),
                 notes=normalized_payload.get("notes"),
             )
-        )
+            contracts_to_create.append(contract)
+            created_key = _dedupe_key(normalized_payload)
+            if created_key:
+                existing_by_key[created_key] = contract
+            if advertiser_fallback_applied and len(invalid_preview) < 10:
+                invalid_preview.append(
+                    {
+                        "row": row_index,
+                        "errors": [
+                            {
+                                "field": "advertiser_name",
+                                "reason": "Missing mapping/value filled automatically.",
+                            }
+                        ],
+                        "raw_excerpt": _raw_row_excerpt(raw_row),
+                    }
+                )
 
     for contract in contracts_to_create:
         db.add(contract)
@@ -177,8 +423,8 @@ async def confirm_mapping_and_import(
     session.total_rows = len(source_rows)
     session.valid_rows = valid_rows
     session.invalid_rows = invalid_rows
-    session.imported_rows = len(contracts_to_create)
-    session.status = ImportStatus.completed if invalid_rows == 0 else ImportStatus.failed
+    session.imported_rows = len(contracts_to_create) + len(contracts_to_update)
+    session.status = ImportStatus.failed if session.imported_rows == 0 else ImportStatus.completed
     session.completed_at = datetime.utcnow()
 
     await db.flush()

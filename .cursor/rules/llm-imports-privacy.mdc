@@ -1,0 +1,25 @@
+---
+description: LLM usage, env keys, and privacy for import / Hubert backends
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# LLM & privacy (BillboardHub)
+
+## Secrets
+
+- No API keys in code or commits. Use `backend/.env`: `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_JWT_SECRET`, etc.
+- `IMPORT_USE_LLM=false` forces local heuristics only (no external sample payloads for column mapping).
+
+## Import pipeline
+
+- Prefer `app.services.llm_gateway` (or configured gateway) over ad-hoc client calls scattered in routes.
+- Sample rows sent to models should stay minimal (already capped in import flow); never log full `all_rows` or raw client files.
+
+## Tracing (optional)
+
+- If LangSmith/LangChain tracing is enabled, project name and keys come from env — document in `.env.example`, not in code.
+
+## Tools / JSON
+
+- LLM outputs should be strict JSON where used; validate with Pydantic after parse.

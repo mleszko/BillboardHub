@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "dev:frontend": "vite dev --host 0.0.0.0 --port 5173",
     "dev:frontend:next": "npm --prefix frontend run dev",
-    "dev:backend": "cd backend && ./.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "dev:backend": "cd backend && ./.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
     "dev:all": "concurrently -n frontend,backend -c blue,green \"npm:dev:frontend\" \"npm:dev:backend\"",
     "dev:all:next": "concurrently -n frontend,backend -c blue,green \"npm:dev:frontend:next\" \"npm:dev:backend\"",
     "build": "vite build",

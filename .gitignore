@@ -31,6 +31,7 @@ backend/.venv
 backend/__pycache__
 backend/**/*.pyc
 backend/billboardhub.db
+backend/tests/_pytest_billboardhub.sqlite
 billboardhub.db
 
 # Wrangler / Cloudflare
@@ -47,3 +48,6 @@ billboardhub.db
 *.njsproj
 *.sln
 *.sw?
+
+# Client / local spreadsheets — never commit real portfolio files
+Outdoor_*.xlsx

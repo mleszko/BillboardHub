@@ -1,0 +1,26 @@
+---
+description: How the agent should communicate and work in this repo (BillboardHub)
+alwaysApply: true
+---
+
+# Agent — BillboardHub
+
+## Communication
+
+- Prefer concise, well-structured answers; default language Polish when the user writes Polish.
+- Brief rationale: evidence → conclusion → next step (no hidden chain-of-thought).
+- Use code citations with line paths when pointing at existing code.
+
+## Execution
+
+- Implement and run commands/tests yourself when the task requires it (real environment).
+- Match existing project style; avoid drive-by refactors and unrelated files.
+- Do not edit user plan files or commit real client spreadsheets / PII.
+
+## Planning
+
+- For large ambiguous changes, offer trade-offs; for straightforward tasks, implement directly without mandatory “3 alternatives + wait” gates unless the user asks for a plan.
+
+## Domain
+
+- **Contracts / import**: respect `PLACEHOLDER_CONTRACT_EXPIRY` and `expiry_unknown` semantics; do not reintroduce fake end dates from filenames as “real” lease ends.

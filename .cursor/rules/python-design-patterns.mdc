@@ -1,0 +1,16 @@
+---
+description: Pragmatic architecture for FastAPI + SQLAlchemy async backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Architecture (pragmatic)
+
+- **I/O at edges**: routes and DB sessions orchestrate; pure transforms (parse, normalize) stay testable without DB.
+- **Boundaries**: HTTP/DB/LLM details do not leak into generic helpers; validate at boundary (Pydantic, explicit parsers).
+- **Async**: use `AsyncSession` consistently; do not block the event loop with sync I/O in async routes.
+- **Configuration**: single settings object; feature flags (e.g. `IMPORT_USE_LLM`) read from env once.
+- **Imports / Excel**: keep `import_excel.py` (read, header guess, noise rows) separate from `import_processor.py` (DB + Contract).
+- **Errors**: actionable messages for API consumers; use appropriate HTTP status (401/403/404/422).
+
+Derived from general design checklist: clarity over cleverness, composition over deep inheritance, idempotent retries only where justified.

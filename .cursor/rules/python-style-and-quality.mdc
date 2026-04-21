@@ -1,0 +1,23 @@
+---
+description: Python style, typing, ruff-friendly (backend)
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Python style & quality
+
+- Type hints on public functions and non-trivial structures.
+- Use `pathlib.Path` for filesystem paths.
+- Avoid global mutable state; prefer explicit dependencies and FastAPI `Depends`.
+- Use `logging` for non-demo paths; avoid `print` in services.
+- Pydantic models for API I/O (`app.schemas.*`).
+
+## Imports
+
+- Order: stdlib → third-party → `app.*` (grouped).
+- No unused imports; no `from module import *`.
+
+## Structure
+
+- Prefer small functions; extract helpers over deep nesting.
+- Run `ruff check backend/app backend/tests` before considering work done.

@@ -1,13 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { appConfig } from "@/lib/config";
 import type {
   ContractCustomColumn,
-  ContractCustomColumnCreatePayload,
-  ContractCustomColumnCreateResponse,
   ContractRow,
+  CreateCustomContractColumnRequest,
 } from "@/lib/types";
 
 type ContractsTableProps = {
@@ -16,13 +16,14 @@ type ContractsTableProps = {
 };
 
 export function ContractsTable({ contracts, customColumns }: ContractsTableProps) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [promptTemplate, setPromptTemplate] = useState("");
   const [outputType, setOutputType] = useState<"text" | "number">("text");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const hasRows = contracts.length > 0;
   const dynamicColumns = useMemo(() => customColumns.filter((column) => column.is_active), [customColumns]);
 
   async function handleCreateColumn(event: React.FormEvent<HTMLFormElement>) {
@@ -33,7 +34,7 @@ export function ContractsTable({ contracts, customColumns }: ContractsTableProps
       return;
     }
     setIsSubmitting(true);
-    const payload: ContractCustomColumnCreatePayload = {
+    const payload: CreateCustomContractColumnRequest = {
       owner_user_id: "demo-user-1",
       name: name.trim(),
       prompt_template: promptTemplate.trim(),
@@ -53,17 +54,22 @@ export function ContractsTable({ contracts, customColumns }: ContractsTableProps
         setErrorMessage("Failed to create custom column.");
         return;
       }
-      await response.json() as ContractCustomColumnCreateResponse;
+      await response.json();
       setName("");
       setPromptTemplate("");
       setOutputType("text");
-      window.location.reload();
+      router.refresh();
     } catch {
       setErrorMessage("Failed to create custom column.");
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  const devHeaders = {
+    "x-dev-user-id": "demo-user-1",
+    "x-dev-user-email": "demo@billboardhub.local",
+  };
 
   if (!contracts.length) {
     return (
@@ -174,6 +180,7 @@ export function ContractsTable({ contracts, customColumns }: ContractsTableProps
               <th className="px-4 py-3 font-medium">Expiry</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Monthly Net</th>
+              <th className="w-24 px-4 py-3 font-medium" />
               {dynamicColumns.map((column) => (
                 <th key={column.id} className="px-4 py-3 font-medium">
                   {column.name}
@@ -187,10 +194,35 @@ export function ContractsTable({ contracts, customColumns }: ContractsTableProps
                 <td className="px-4 py-3">{contract.contract_number ?? "—"}</td>
                 <td className="px-4 py-3">{contract.advertiser_name}</td>
                 <td className="px-4 py-3">{contract.city ?? "—"}</td>
-                <td className="px-4 py-3">{contract.expiry_date}</td>
+                <td className="px-4 py-3">{contract.expiry_unknown ? "—" : contract.expiry_date}</td>
                 <td className="px-4 py-3 capitalize">{contract.contract_status.replaceAll("_", " ")}</td>
                 <td className="px-4 py-3">
                   {contract.monthly_rent_net !== null ? `${contract.monthly_rent_net.toFixed(2)} PLN` : "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                    disabled={deletingId === contract.id}
+                    onClick={() => {
+                      const label = contract.contract_number ?? contract.advertiser_name;
+                      if (!window.confirm(`Delete contract "${label}"? This cannot be undone.`)) return;
+                      void (async () => {
+                        setDeletingId(contract.id);
+                        try {
+                          const response = await fetch(`${appConfig.backendUrl}/contracts/${contract.id}`, {
+                            method: "DELETE",
+                            headers: devHeaders,
+                          });
+                          if (response.ok) router.refresh();
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      })();
+                    }}
+                  >
+                    {deletingId === contract.id ? "..." : "Delete"}
+                  </button>
                 </td>
                 {dynamicColumns.map((column) => {
                   const value = contract.custom_values[column.id];

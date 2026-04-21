@@ -43,6 +43,7 @@ type BackendContract = {
   longitude: number | null;
   start_date: string | null;
   expiry_date: string;
+  expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
 };
@@ -73,9 +74,14 @@ const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
   augustów: { lat: 53.8445, lng: 22.9798 },
 };
 
-function statusFromBackend(contractStatus: string, expiryDate: string): Billboard["status"] {
+function statusFromBackend(
+  contractStatus: string,
+  expiryDate: string,
+  expiryUnknown?: boolean,
+): Billboard["status"] {
   if (contractStatus === "terminated") return "vacant";
   if (contractStatus === "expired") return "critical";
+  if (expiryUnknown) return "active";
   const d = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   if (d <= 30) return "critical";
   if (d <= 60) return "expiring_soon";
@@ -189,10 +195,11 @@ function MapPage() {
           type,
           size: defaultSize(type),
           monthlyPrice: item.monthly_rent_net || 0,
-          status: statusFromBackend(item.contract_status, item.expiry_date),
+          status: statusFromBackend(item.contract_status, item.expiry_date, item.expiry_unknown),
           client: item.advertiser_name,
           contractStart: item.start_date || undefined,
-          contractEnd: item.expiry_date,
+          contractEnd: item.expiry_unknown ? undefined : item.expiry_date,
+          expiryUnknown: Boolean(item.expiry_unknown),
           creativePhoto: mapPhotos[idx % mapPhotos.length],
           dailyImpressions: estimateImpressions(type),
         };
