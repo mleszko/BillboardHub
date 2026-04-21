@@ -50,4 +50,4 @@ billboardhub.db
 *.sw?
 
 # Client / local spreadsheets — never commit real portfolio files
-Outdoor_*.xlsx
+*.xlsx
