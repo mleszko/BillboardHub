@@ -37,6 +37,10 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "wlasciciel": [("property_owner_name", 0.88)],
     "wynajmujacy": [("property_owner_name", 0.9)],
     "wynajmujaca": [("property_owner_name", 0.88)],
+    "wynajmujacy_nazwa_firmy": [("property_owner_name", 0.92)],
+    "wynajmujacy_firma": [("property_owner_name", 0.92)],
+    "nazwa_wynajmujacego": [("property_owner_name", 0.92)],
+    "wlasciciel_nieruchomosci": [("property_owner_name", 0.9)],
     "powierzchnia": [("surface_size", 0.9)],
     "rozmiar": [("surface_size", 0.82)],
     "format": [("surface_size", 0.55)],
@@ -70,6 +74,12 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "obowiazuje_do": [("expiry_date", 0.93)],
 }
 
+CONTAINS_HEADER_HINTS: tuple[tuple[str, str, float], ...] = (
+    ("wynajm", "property_owner_name", 0.9),
+    ("wlascic", "property_owner_name", 0.88),
+    ("najemc", "advertiser_name", 0.84),
+)
+
 
 def _normalize_header(header: str) -> str:
     cleaned = header.strip().lower()
@@ -85,6 +95,11 @@ def _fallback_guess(columns: list[str]) -> list[MappingProposal]:
     for column in columns:
         normalized = _normalize_header(column)
         hints = DEFAULT_HEADER_HINTS.get(normalized, [])
+        if not hints:
+            for needle, target_field, confidence in CONTAINS_HEADER_HINTS:
+                if needle in normalized:
+                    hints = [(target_field, confidence)]
+                    break
         if hints:
             target, confidence = hints[0]
             rationale = f"Matched normalized Polish header '{normalized}'."

@@ -177,3 +177,13 @@ async def delete_contract(
     if result.rowcount == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_all_contracts(
+    user: UserContext = Depends(ensure_profile),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    await db.execute(delete(Contract).where(Contract.owner_user_id == user.user_id))
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

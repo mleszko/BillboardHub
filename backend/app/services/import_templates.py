@@ -50,6 +50,17 @@ IMPORT_TEMPLATE_PRESETS: list[dict[str, Any]] = [
             "monthly_aggregate": "last",
         },
     },
+    {
+        "id": "known_workbook_v1",
+        "label": "Szablon wewnętrzny v1",
+        "description": "Szablon wewnętrzny v1 — użyj, jeśli plik pasuje do zapisanego układu.",
+        "options": {
+            "header_row_1based": 0,
+            "skip_rows_before_header": 0,
+            "unpivot_month_columns": False,
+            "monthly_aggregate": "mean",
+        },
+    },
 ]
 
 
