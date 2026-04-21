@@ -34,7 +34,6 @@ HEADER_FINGERPRINTS: frozenset[str] = frozenset(
 
 # Normalized column token -> canonical import field (after preprocess_dataframe renames).
 _TARGET_BY_TOKEN: dict[str, str | None] = {
-    "l_p": "contract_number",
     "miasto": "city",
     "lokalizacja": "location_address",
     "uwagi": "notes",

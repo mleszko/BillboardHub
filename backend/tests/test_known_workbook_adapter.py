@@ -65,3 +65,4 @@ def test_known_workbook_adapter_matches_and_loads_with_fingerprint(monkeypatch) 
     by_source = {p.source_column_name: p.target_field_name for p in loaded.proposals}
     assert by_source["miasto"] == "city"
     assert by_source["koszt miesięczny netto"] == "monthly_rent_net"
+    assert by_source["l.p."] is None
