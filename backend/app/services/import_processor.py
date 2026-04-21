@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
 from app.schemas.imports import ImportExecuteResponse, ImportMappingConfirmationRequest
+from app.services.custom_columns import compute_active_columns_for_contracts
 from app.services.import_guesser import parse_date, parse_decimal
 
 
@@ -179,6 +180,14 @@ async def confirm_mapping_and_import(
     session.imported_rows = len(contracts_to_create)
     session.status = ImportStatus.completed if invalid_rows == 0 else ImportStatus.failed
     session.completed_at = datetime.utcnow()
+
+    await db.flush()
+    if contracts_to_create:
+        await compute_active_columns_for_contracts(
+            db=db,
+            user_id=session.owner_user_id,
+            contracts=contracts_to_create,
+        )
 
     await db.commit()
 

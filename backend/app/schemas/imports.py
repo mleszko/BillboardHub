@@ -89,6 +89,42 @@ class ContractsListItem(BaseModel):
     monthly_rent_net: float | None
 
 
+class ContractCustomColumnItem(BaseModel):
+    id: str
+    name: str
+    prompt_template: str
+    output_type: str
+    is_active: bool
+
+
+class ContractCustomValueItem(BaseModel):
+    status: str
+    value_text: str | None = None
+    value_number: float | None = None
+    error_message: str | None = None
+    computed_at: str | None = None
+
+
+class ContractsListItemWithCustom(ContractsListItem):
+    custom_values: dict[str, ContractCustomValueItem] = {}
+
+
 class ContractsListResponse(BaseModel):
-    items: list[ContractsListItem]
+    items: list[ContractsListItemWithCustom]
+    custom_columns: list[ContractCustomColumnItem] = []
+
+
+class ContractCustomColumnCreateRequest(BaseModel):
+    owner_user_id: str
+    name: str
+    prompt_template: str
+    output_type: str = "text"
+
+
+class ContractCustomColumnCreateResponse(BaseModel):
+    column: ContractCustomColumnItem
+
+
+class ContractCustomColumnsListResponse(BaseModel):
+    items: list[ContractCustomColumnItem]
 

@@ -1,9 +1,9 @@
 import { ContractsTable } from "@/components/contracts-table";
 import { ModeBadge } from "@/components/mode-badge";
 import { appConfig } from "@/lib/config";
-import type { ContractRow, ContractsListResponse } from "@/lib/types";
+import type { ContractRow, ContractCustomColumn, ContractsListResponse } from "@/lib/types";
 
-async function fetchContracts(): Promise<ContractRow[]> {
+async function fetchContracts(): Promise<{ items: ContractRow[]; custom_columns: ContractCustomColumn[] }> {
   try {
     const response = await fetch(`${appConfig.backendUrl}/contracts`, {
       headers: {
@@ -13,17 +13,17 @@ async function fetchContracts(): Promise<ContractRow[]> {
       cache: "no-store",
     });
     if (!response.ok) {
-      return [];
+      return { items: [], custom_columns: [] };
     }
     const data = (await response.json()) as ContractsListResponse;
-    return data.items;
+    return data;
   } catch {
-    return [];
+    return { items: [], custom_columns: [] };
   }
 }
 
 export default async function AuthContractsPage() {
-  const contracts = await fetchContracts();
+  const data = await fetchContracts();
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
@@ -37,7 +37,7 @@ export default async function AuthContractsPage() {
         <ModeBadge mode="auth" />
       </header>
 
-      <ContractsTable contracts={contracts} />
+      <ContractsTable contracts={data.items} customColumns={data.custom_columns} />
     </main>
   );
 }
