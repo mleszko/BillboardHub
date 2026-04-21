@@ -41,6 +41,20 @@ def _to_json_safe_records(df: pd.DataFrame, limit: int | None = None) -> list[di
     return json.loads(json.dumps(records, default=str))
 
 
+def _normalize_sheet_names(sheet_name: str, sheet_names: list[str] | None) -> list[str]:
+    cleaned = [s.strip() for s in (sheet_names or []) if s and s.strip()]
+    if cleaned:
+        out: list[str] = []
+        seen: set[str] = set()
+        for s in cleaned:
+            if s not in seen:
+                out.append(s)
+                seen.add(s)
+        return out
+    fallback = sheet_name.strip()
+    return [fallback] if fallback else []
+
+
 def _contract_model_fields() -> list[str]:
     excluded = {
         "id",
@@ -160,6 +174,7 @@ async def generate_mapping_proposal(
     file: UploadFile,
     *,
     sheet_name: str = "",
+    sheet_names: list[str] | None = None,
     header_row_1based: int = 0,
     skip_rows_before_header: int = 0,
     unpivot_month_columns: bool = False,
@@ -172,54 +187,80 @@ async def generate_mapping_proposal(
     file_name = file.filename or "uploaded-file"
     lower = file_name.lower()
 
+    selected_sheets = _normalize_sheet_names(sheet_name, sheet_names)
     sheet_arg: str | int | None
     if lower.endswith(".csv"):
         sheet_arg = None
     else:
-        sheet_arg = sheet_name.strip() if sheet_name.strip() else 0
+        if len(selected_sheets) == 1:
+            sheet_arg = selected_sheets[0]
+        elif not selected_sheets:
+            sheet_arg = 0
+        else:
+            sheet_arg = 0
 
     if monthly_aggregate not in ("mean", "last", "sum_as_monthly"):
         monthly_aggregate = "mean"
 
-    adapter_result = try_known_adapter(file_name, file_bytes, sheet_name)
+    adapter_result = try_known_adapter(file_name, file_bytes, selected_sheets[0] if len(selected_sheets) == 1 else "")
     if adapter_result is not None:
         source_columns = adapter_result.source_columns
-        all_rows = adapter_result.all_rows
+        all_rows = []
+        for row in adapter_result.all_rows:
+            merged = dict(row)
+            merged["__source_sheet"] = selected_sheets[0] if selected_sheets else adapter_result.parse_options.get("resolved_sheet")
+            all_rows.append(merged)
         sample_rows = all_rows[:2]
         proposals = adapter_result.proposals
         guessed_by_model = adapter_result.guessed_by_model
         warning = adapter_result.warning
         parse_options: dict[str, object] = dict(adapter_result.parse_options)
     else:
-        df, resolved_header_1based = read_tabular_dataframe(
-            file_name,
-            file_bytes,
-            sheet_name=sheet_arg,
-            header_row_1based=header_row_1based,
-            skip_rows_before_header=max(0, skip_rows_before_header),
-        )
+        dfs: list[pd.DataFrame] = []
+        resolved_headers: dict[str, int] = {}
+        any_unpivot_applied = False
+        source_sheet_names = selected_sheets if selected_sheets else [sheet_arg]  # type: ignore[list-item]
+        for s in source_sheet_names:
+            current_sheet = s if s not in (None, "") else 0
+            df, resolved_header_1based = read_tabular_dataframe(
+                file_name,
+                file_bytes,
+                sheet_name=current_sheet,
+                header_row_1based=header_row_1based,
+                skip_rows_before_header=max(0, skip_rows_before_header),
+            )
+            if unpivot_month_columns:
+                before_cols = len(df.columns)
+                df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
+                any_unpivot_applied = any_unpivot_applied or before_cols != len(df.columns)
+            df = df.dropna(how="all")
+            resolved_name = str(current_sheet) if isinstance(current_sheet, int) else current_sheet
+            resolved_headers[resolved_name] = resolved_header_1based
+            records = _to_json_safe_records(df)
+            for row in records:
+                row["__source_sheet"] = resolved_name
+            if records:
+                dfs.append(pd.DataFrame(records))
+            elif len(source_sheet_names) == 1:
+                dfs.append(df.assign(__source_sheet=resolved_name))
 
-        unpivot_applied = False
-        if unpivot_month_columns:
-            before_cols = len(df.columns)
-            df = collapse_wide_month_columns(df, aggregate=monthly_aggregate)  # type: ignore[arg-type]
-            unpivot_applied = before_cols != len(df.columns)
-
-        df = df.dropna(how="all")
-        source_columns = [str(column) for column in df.columns.tolist()]
-        sample_rows = _to_json_safe_records(df, limit=2)
-        all_rows = _to_json_safe_records(df)
-
+        merged_df = pd.concat(dfs, ignore_index=True, sort=False) if dfs else pd.DataFrame()
+        if "__source_sheet" in merged_df.columns:
+            source_columns = [str(column) for column in merged_df.columns.tolist() if str(column) != "__source_sheet"]
+        else:
+            source_columns = [str(column) for column in merged_df.columns.tolist()]
+        all_rows = _to_json_safe_records(merged_df)
+        sample_rows = all_rows[:2]
         proposals, guessed_by_model, warning = _guess_mapping_with_gpt(source_columns, sample_rows)
-
         parse_options = {
             "sheet_name": sheet_name.strip() or None,
-            "header_row_1based": resolved_header_1based,
+            "sheet_names": selected_sheets or None,
+            "header_row_1based": resolved_headers,
             "header_row_requested": header_row_1based,
             "header_auto": header_row_1based < 1,
             "skip_rows_before_header": skip_rows_before_header,
             "unpivot_month_columns": unpivot_month_columns,
-            "unpivot_applied": unpivot_applied,
+            "unpivot_applied": any_unpivot_applied,
             "monthly_aggregate": monthly_aggregate,
         }
 
@@ -314,6 +355,7 @@ def _form_bool(value: str) -> bool:
 async def guess_mapping(
     file: UploadFile = File(...),
     sheet_name: str = Form(""),
+    sheet_names: list[str] = Form([]),
     header_row_1based: int = Form(0),
     skip_rows_before_header: int = Form(0),
     unpivot_month_columns: str = Form("false"),
@@ -327,6 +369,7 @@ async def guess_mapping(
             user_id=user.user_id,
             file=file,
             sheet_name=sheet_name,
+            sheet_names=sheet_names,
             header_row_1based=header_row_1based,
             skip_rows_before_header=skip_rows_before_header,
             unpivot_month_columns=_form_bool(unpivot_month_columns),

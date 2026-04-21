@@ -81,10 +81,16 @@ class MappingConfirmationItem(BaseModel):
     transform_hint: str | None = None
 
 
+class SheetMappingOverride(BaseModel):
+    sheet_name: str
+    mapping: list[MappingConfirmationItem]
+
+
 class ImportMappingConfirmationRequest(BaseModel):
     session_id: str
     owner_user_id: str
     mapping: list[MappingConfirmationItem]
+    sheet_overrides: list[SheetMappingOverride] = []
 
 
 class ImportExecuteResponse(BaseModel):

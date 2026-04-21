@@ -138,13 +138,16 @@ function ImportPage() {
   const [inspectSheets, setInspectSheets] = useState<InspectSheet[]>([]);
   const [inspectFileName, setInspectFileName] = useState("");
   const [templates, setTemplates] = useState<ImportTemplate[]>([]);
-  const [selectedSheet, setSelectedSheet] = useState("");
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   /** 0 = wykrywanie automatyczne (zalecane). */
   const [headerRow1Based, setHeaderRow1Based] = useState("0");
   const [skipRowsBefore, setSkipRowsBefore] = useState("0");
   const [showAdvancedParse, setShowAdvancedParse] = useState(false);
   const [unpivotMonths, setUnpivotMonths] = useState(false);
   const [monthlyAggregate, setMonthlyAggregate] = useState("mean");
+  const [sheetOverrides, setSheetOverrides] = useState<
+    Record<string, Record<string, string | null>>
+  >({});
 
   useEffect(() => {
     void (async () => {
@@ -164,8 +167,7 @@ function ImportPage() {
 
   const requiredTargetsMissing = useMemo(() => {
     const selected = new Set(mapping.map((item) => item.target_field_name).filter(Boolean));
-    const hasParty =
-      selected.has("advertiser_name") || selected.has("property_owner_name");
+    const hasParty = selected.has("advertiser_name") || selected.has("property_owner_name");
     return !hasParty;
   }, [mapping]);
 
@@ -199,7 +201,7 @@ function ImportPage() {
       setInspectFileName(data.file_name);
       setInspectSheets(data.sheets);
       const first = data.sheets[0]?.name ?? "";
-      setSelectedSheet(first);
+      setSelectedSheets(first ? [first] : []);
       setStage("configure");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Błąd podglądu pliku.");
@@ -219,7 +221,9 @@ function ImportPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("sheet_name", selectedSheet);
+      const firstSheet = selectedSheets[0] ?? "";
+      formData.append("sheet_name", firstSheet);
+      selectedSheets.forEach((sheet) => formData.append("sheet_names", sheet));
       const hdr = parseInt(headerRow1Based, 10);
       formData.append("header_row_1based", String(Number.isFinite(hdr) ? hdr : 0));
       formData.append(
@@ -264,6 +268,16 @@ function ImportPage() {
     );
   };
 
+  const updateSheetOverride = (sheet: string, sourceColumn: string, value: string) => {
+    setSheetOverrides((prev) => ({
+      ...prev,
+      [sheet]: {
+        ...(prev[sheet] ?? {}),
+        [sourceColumn]: value === "ignore" ? null : value,
+      },
+    }));
+  };
+
   const confirmImport = async () => {
     if (!proposal) return;
     setError(null);
@@ -284,6 +298,24 @@ function ImportPage() {
             confirmed_by_user: true,
             user_override: true,
             transform_hint: item.transform_hint ?? null,
+          })),
+          sheet_overrides: Object.entries(sheetOverrides).map(([sheet_name, overrides]) => ({
+            sheet_name,
+            mapping: mapping.map((item) => ({
+              source_column_name: item.source_column_name,
+              target_field_name: Object.prototype.hasOwnProperty.call(
+                overrides,
+                item.source_column_name,
+              )
+                ? overrides[item.source_column_name]
+                : item.target_field_name,
+              confirmed_by_user: true,
+              user_override: Object.prototype.hasOwnProperty.call(
+                overrides,
+                item.source_column_name,
+              ),
+              transform_hint: item.transform_hint ?? null,
+            })),
           })),
         }),
       });
@@ -312,11 +344,12 @@ function ImportPage() {
     setIsBusy(false);
     setInspectSheets([]);
     setInspectFileName("");
-    setSelectedSheet("");
+    setSelectedSheets([]);
     setHeaderRow1Based("1");
     setSkipRowsBefore("0");
     setUnpivotMonths(false);
     setMonthlyAggregate("mean");
+    setSheetOverrides({});
   };
 
   const isCsv = inspectFileName.toLowerCase().endsWith(".csv");
@@ -382,9 +415,9 @@ function ImportPage() {
               <div>
                 <h3 className="text-lg font-semibold">Wgraj plik Excel z portfelem</h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                  Najpierw wykryjemy arkusze i rozmiar tabeli.{" "}
-                  <strong>Wiersz nagłówka</strong> wybierany jest automatycznie; możesz doprecyzować
-                  ustawienia zaawansowane lub <strong>złączyć kolumny miesięczne</strong>.
+                  Najpierw wykryjemy arkusze i rozmiar tabeli. <strong>Wiersz nagłówka</strong>{" "}
+                  wybierany jest automatycznie; możesz doprecyzować ustawienia zaawansowane lub{" "}
+                  <strong>złączyć kolumny miesięczne</strong>.
                 </p>
               </div>
               <div className="flex flex-col items-center gap-2 sm:flex-row">
@@ -463,19 +496,31 @@ function ImportPage() {
 
               {!isCsv && inspectSheets.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Arkusz</Label>
-                  <Select value={selectedSheet} onValueChange={setSelectedSheet}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {inspectSheets.map((s) => (
-                        <SelectItem key={s.name} value={s.name}>
-                          {s.name} (~{s.row_count}×{s.column_count})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Zakładki do importu</Label>
+                  <div className="space-y-2 rounded-md border p-3">
+                    {inspectSheets.map((s) => {
+                      const checked = selectedSheets.includes(s.name);
+                      return (
+                        <label key={s.name} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              setSelectedSheets((prev) => {
+                                if (event.target.checked) {
+                                  return [...prev, s.name];
+                                }
+                                return prev.filter((name) => name !== s.name);
+                              });
+                            }}
+                          />
+                          <span>
+                            {s.name} (~{s.row_count}x{s.column_count})
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -653,6 +698,62 @@ function ImportPage() {
                   ))}
                 </div>
               </div>
+
+              {!isCsv && selectedSheets.length > 1 && (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="text-sm font-medium">
+                    Override mapowania per zakładka (opcjonalne)
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Używamy wspólnego mapowania domyślnie. Tu możesz nadpisać pola tylko dla
+                    wybranych zakładek.
+                  </p>
+                  <div className="space-y-3">
+                    {selectedSheets.map((sheet) => (
+                      <div key={sheet} className="rounded-md border p-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {sheet}
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          {mapping.map((column) => (
+                            <div
+                              key={`${sheet}:${column.source_column_name}`}
+                              className="space-y-1"
+                            >
+                              <Label className="text-[11px]">{column.source_column_name}</Label>
+                              <Select
+                                value={
+                                  Object.prototype.hasOwnProperty.call(
+                                    sheetOverrides[sheet] ?? {},
+                                    column.source_column_name,
+                                  )
+                                    ? (sheetOverrides[sheet]?.[column.source_column_name] ??
+                                      "ignore")
+                                    : (column.target_field_name ?? "ignore")
+                                }
+                                onValueChange={(value) =>
+                                  updateSheetOverride(sheet, column.source_column_name, value)
+                                }
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TARGET_FIELDS.map((f) => (
+                                    <SelectItem key={f} value={f} className="text-xs">
+                                      {f}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
                 <Button variant="ghost" onClick={() => setStage("configure")}>

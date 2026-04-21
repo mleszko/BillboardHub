@@ -1,6 +1,8 @@
 from pathlib import Path
+from io import BytesIO
 
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 
 from app.main import app
 
@@ -42,6 +44,20 @@ def _run_import(client: TestClient, raw_csv: bytes) -> dict:
     confirm = client.post("/imports/confirm-mapping", headers=_DEV_HEADERS, json=payload)
     assert confirm.status_code == 200, confirm.text
     return confirm.json()
+
+
+def _build_multisheet_workbook() -> bytes:
+    wb = Workbook()
+    ws1 = wb.active
+    ws1.title = "Arkusz A"
+    ws1.append(["Najemca", "Miasto", "Adres", "Data_wygasniecia"])
+    ws1.append(["Klient A", "Warszawa", "Marszalkowska 1", "2026-12-31"])
+    ws2 = wb.create_sheet("Arkusz B")
+    ws2.append(["Wynajmujący", "Miasto", "Adres", "Data_wygasniecia"])
+    ws2.append(["Wlasciciel B", "Krakow", "Dluga 2", "2026-12-31"])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 
 def test_reimport_does_not_duplicate_contracts() -> None:
@@ -102,3 +118,96 @@ def test_import_without_client_mapping_still_creates_record_with_placeholder() -
         assert listed.status_code == 200, listed.text
         items = listed.json()["items"]
         assert any(item["advertiser_name"] == "DO_UZUPELNIENIA" for item in items)
+
+
+def test_multisheet_guess_mapping_accepts_sheet_names() -> None:
+    workbook = _build_multisheet_workbook()
+    with TestClient(app) as client:
+        client.get("/health")
+        guess = client.post(
+            "/imports/guess-mapping",
+            headers=_DEV_HEADERS,
+            files={"file": ("multi.xlsx", workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={
+                "sheet_name": "Arkusz A",
+                "sheet_names": ["Arkusz A", "Arkusz B"],
+                "header_row_1based": "0",
+                "skip_rows_before_header": "0",
+                "unpivot_month_columns": "false",
+                "monthly_aggregate": "mean",
+            },
+        )
+        assert guess.status_code == 200, guess.text
+        body = guess.json()
+        assert body["total_rows"] == 2
+        assert set(body.get("parse_options", {}).get("sheet_names", [])) == {"Arkusz A", "Arkusz B"}
+
+
+def test_multisheet_import_with_sheet_override_per_row() -> None:
+    workbook = _build_multisheet_workbook()
+    with TestClient(app) as client:
+        client.get("/health")
+        guess = client.post(
+            "/imports/guess-mapping",
+            headers=_DEV_HEADERS,
+            files={"file": ("multi.xlsx", workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={
+                "sheet_names": ["Arkusz A", "Arkusz B"],
+                "header_row_1based": "0",
+                "skip_rows_before_header": "0",
+                "unpivot_month_columns": "false",
+                "monthly_aggregate": "mean",
+            },
+        )
+        assert guess.status_code == 200, guess.text
+        proposal = guess.json()
+        base_mapping = []
+        for row in proposal["mapping_suggestions"]:
+            target = row["target_field_name"]
+            if row["source_column_name"] == "Wynajmujący":
+                target = None
+            base_mapping.append(
+                {
+                    "source_column_name": row["source_column_name"],
+                    "target_field_name": target,
+                    "confirmed_by_user": True,
+                    "user_override": True,
+                    "transform_hint": row.get("transform_hint"),
+                }
+            )
+        payload = {
+            "session_id": proposal["session_id"],
+            "owner_user_id": proposal["owner_user_id"],
+            "mapping": base_mapping,
+            "sheet_overrides": [
+                {
+                    "sheet_name": "Arkusz B",
+                    "mapping": [
+                        {
+                            "source_column_name": row["source_column_name"],
+                            "target_field_name": (
+                                "property_owner_name"
+                                if row["source_column_name"] == "Wynajmujący"
+                                else row["target_field_name"]
+                            ),
+                            "confirmed_by_user": True,
+                            "user_override": row["source_column_name"] == "Wynajmujący",
+                            "transform_hint": row.get("transform_hint"),
+                        }
+                        for row in proposal["mapping_suggestions"]
+                    ],
+                }
+            ],
+        }
+        confirm = client.post("/imports/confirm-mapping", headers=_DEV_HEADERS, json=payload)
+        assert confirm.status_code == 200, confirm.text
+        result = confirm.json()
+        assert result["status"] == "completed"
+        assert result["imported_rows"] == 2
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        items = listed.json()["items"]
+        advertiser_names = {item["advertiser_name"] for item in items}
+        assert "Klient A" in advertiser_names
+        assert "Wlasciciel B" in advertiser_names

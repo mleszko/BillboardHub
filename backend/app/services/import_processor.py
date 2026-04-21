@@ -63,6 +63,8 @@ def _to_decimal(value: Any) -> Decimal | None:
 def _clean_party_field(value: Any) -> Any:
     if value is None:
         return None
+    if isinstance(value, float) and value != value:
+        return None
     if isinstance(value, str):
         s = value.strip()
         if not s or s in {"?", "-", "—", "..", "…"}:
@@ -215,6 +217,20 @@ async def confirm_mapping_and_import(
         if item.target_field_name and item.confirmed_by_user
     }
     transform_hints = {item.source_column_name: item.transform_hint for item in payload.mapping if item.transform_hint}
+    sheet_mapped_columns: dict[str, dict[str, str]] = {}
+    sheet_transform_hints: dict[str, dict[str, str]] = {}
+    for override in payload.sheet_overrides:
+        normalized_name = override.sheet_name.strip()
+        if not normalized_name:
+            continue
+        sheet_mapped_columns[normalized_name] = {
+            item.source_column_name: item.target_field_name
+            for item in override.mapping
+            if item.target_field_name and item.confirmed_by_user
+        }
+        sheet_transform_hints[normalized_name] = {
+            item.source_column_name: item.transform_hint for item in override.mapping if item.transform_hint
+        }
 
     try:
         storage_payload = json.loads(session.storage_path or "{}")
@@ -257,11 +273,17 @@ async def confirm_mapping_and_import(
             continue
         normalized_payload: dict[str, Any] = {}
         validation_errors: list[dict[str, str]] = []
+        row_source_sheet = str(raw_row.get("__source_sheet") or "").strip()
+        row_mapping = dict(mapped_columns)
+        row_transform_hints = dict(transform_hints)
+        if row_source_sheet and row_source_sheet in sheet_mapped_columns:
+            row_mapping.update(sheet_mapped_columns[row_source_sheet])
+            row_transform_hints.update(sheet_transform_hints.get(row_source_sheet, {}))
 
-        for source_column, target_field in mapped_columns.items():
+        for source_column, target_field in row_mapping.items():
             raw_value = raw_row.get(source_column)
             normalized_value = normalize_value(target_field, raw_value)
-            if target_field in {"start_date", "expiry_date"} and transform_hints.get(source_column):
+            if target_field in {"start_date", "expiry_date"} and row_transform_hints.get(source_column):
                 normalized_value = parse_date(raw_value)
             normalized_payload[target_field] = normalized_value
 
