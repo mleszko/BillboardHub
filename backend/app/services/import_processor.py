@@ -8,10 +8,11 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
 from app.core.config import get_settings
 from app.models.models import BillboardType, Contract, ImportColumnMapping, ImportRow, ImportRowStatus, ImportSession, ImportStatus
 from app.schemas.imports import ImportExecuteResponse, ImportMappingConfirmationRequest
-from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
+from app.services.custom_columns import compute_active_columns_for_contracts
 from app.services.import_excel import is_noise_import_row, is_probable_summary_raw_row
 from app.services.import_guesser import parse_date, parse_decimal
 from app.services.llm_gateway import chat_json_with_fallback
@@ -425,6 +426,14 @@ async def confirm_mapping_and_import(
     session.imported_rows = len(contracts_to_create) + len(contracts_to_update)
     session.status = ImportStatus.failed if session.imported_rows == 0 else ImportStatus.completed
     session.completed_at = datetime.utcnow()
+
+    await db.flush()
+    if contracts_to_create:
+        await compute_active_columns_for_contracts(
+            db=db,
+            user_id=session.owner_user_id,
+            contracts=contracts_to_create,
+        )
 
     await db.commit()
 

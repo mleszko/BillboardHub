@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.auth_profile import router as auth_profile_router
+from app.api.routes.custom_columns import router as custom_columns_router
 from app.api.routes.health import router as health_router
 from app.api.routes.hubert import router as hubert_router
 from app.api.routes.imports import router as imports_router
@@ -32,6 +33,7 @@ app.include_router(imports_router)
 app.include_router(imports_router, prefix="/api", include_in_schema=False)
 app.include_router(hubert_router)
 app.include_router(contracts_router)
+app.include_router(custom_columns_router)
 app.include_router(contracts_router, prefix="/api", include_in_schema=False)
 
 
