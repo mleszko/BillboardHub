@@ -58,9 +58,7 @@ export function StatsHeader({ data }: { data?: StatsHeaderData }) {
               <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground md:text-xs">
                 {it.label}
               </p>
-              <p className="mt-1.5 text-xl font-semibold tracking-tight md:text-3xl">
-                {it.value}
-              </p>
+              <p className="mt-1.5 text-xl font-semibold tracking-tight md:text-3xl">{it.value}</p>
             </div>
             <div
               className={cn(

@@ -14,7 +14,9 @@ export function RevenueChart({ data }: { data?: RevenuePoint[] }) {
       <CardHeader>
         <CardTitle className="text-base font-semibold">Przychód miesięczny (PLN)</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {data ? "Projekcja 7 miesięcy na bazie dat wygaśnięć" : "Ostatnie 7 miesięcy · suma kontraktowa"}
+          {data
+            ? "Projekcja 7 miesięcy na bazie dat wygaśnięć"
+            : "Ostatnie 7 miesięcy · suma kontraktowa"}
         </p>
       </CardHeader>
       <CardContent className="h-[260px] pl-1 pr-3">

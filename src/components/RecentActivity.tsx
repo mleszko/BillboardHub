@@ -25,7 +25,9 @@ export function RecentActivity({ items }: { items?: ActivityItem[] }) {
       <CardHeader>
         <CardTitle className="text-base font-semibold">Aktywność</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {items ? "Wygenerowane z aktualnych danych kontraktowych" : "Ostatnie zdarzenia w systemie"}
+          {items
+            ? "Wygenerowane z aktualnych danych kontraktowych"
+            : "Ostatnie zdarzenia w systemie"}
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -33,7 +35,12 @@ export function RecentActivity({ items }: { items?: ActivityItem[] }) {
           const v = iconMap[a.type as keyof typeof iconMap];
           return (
             <div key={a.id} className="flex items-start gap-3">
-              <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", v.cls)}>
+              <div
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+                  v.cls,
+                )}
+              >
                 <v.icon className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">

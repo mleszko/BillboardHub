@@ -25,6 +25,7 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
   useEffect(() => {
     if (!containerRef.current || mapRef.current || typeof window === "undefined") return;
     let cancelled = false;
+    const markers = markersRef.current;
 
     const init = async () => {
       const L = await import("leaflet");
@@ -36,13 +37,10 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
         attributionControl: false,
       }).setView([53.4, 23.0], 8);
 
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        {
-          maxZoom: 19,
-          subdomains: "abcd",
-        },
-      ).addTo(map);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19,
+        subdomains: "abcd",
+      }).addTo(map);
 
       L.control.attribution({ prefix: false }).addAttribution("© OSM, CARTO").addTo(map);
       mapRef.current = map;
@@ -55,7 +53,7 @@ export function BillboardMap({ billboards, selectedId, onSelect }: BillboardMapP
       mapRef.current?.remove();
       mapRef.current = null;
       leafletRef.current = null;
-      markersRef.current.clear();
+      markers.clear();
     };
   }, []);
 

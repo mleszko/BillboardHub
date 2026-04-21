@@ -37,6 +37,7 @@ CREATE TYPE app_mode AS ENUM ('auth', 'demo');
 ## 3) Tables
 
 ## 3.1 `profiles`
+
 App-level profile attached to Supabase-authenticated users.
 
 ```sql
@@ -52,11 +53,13 @@ CREATE TABLE profiles (
 ```
 
 Indexes:
+
 - `profiles_email_idx` on `(email)`
 
 ---
 
 ## 3.2 `contracts`
+
 Canonical billboard contract records for production usage.
 
 ```sql
@@ -93,17 +96,20 @@ CREATE TABLE contracts (
 ```
 
 Indexes:
+
 - `contracts_owner_idx` on `(owner_user_id)`
 - `contracts_expiry_idx` on `(owner_user_id, expiry_date)`
 - `contracts_status_idx` on `(owner_user_id, contract_status)`
 - `contracts_city_idx` on `(owner_user_id, city)`
 
 Suggested unique constraint (optional, based on data cleanliness):
+
 - `(owner_user_id, contract_number)` where `contract_number IS NOT NULL`
 
 ---
 
 ## 3.3 `import_sessions`
+
 One uploaded file and its processing lifecycle.
 
 ```sql
@@ -132,12 +138,14 @@ CREATE TABLE import_sessions (
 ```
 
 Indexes:
+
 - `import_sessions_owner_idx` on `(owner_user_id, created_at DESC)`
 - `import_sessions_status_idx` on `(owner_user_id, status)`
 
 ---
 
 ## 3.4 `import_column_mappings`
+
 Stores AI proposal and user-confirmed mapping per session.
 
 ```sql
@@ -162,15 +170,18 @@ CREATE TABLE import_column_mappings (
 ```
 
 Indexes:
+
 - `import_mappings_session_idx` on `(import_session_id)`
 - `import_mappings_owner_idx` on `(owner_user_id, import_session_id)`
 
 Constraint:
+
 - unique `(import_session_id, source_column_name)`
 
 ---
 
 ## 3.5 `import_rows`
+
 Row-level normalized payload, validation state, and import trace.
 
 ```sql
@@ -193,15 +204,18 @@ CREATE TABLE import_rows (
 ```
 
 Indexes:
+
 - `import_rows_session_idx` on `(import_session_id, source_row_number)`
 - `import_rows_status_idx` on `(import_session_id, status)`
 
 Constraint:
+
 - unique `(import_session_id, source_row_number)`
 
 ---
 
 ## 3.6 `hubert_conversations` (Demo Mode)
+
 Conversation thread metadata for demo-only Hubert advisor.
 
 ```sql
@@ -217,14 +231,17 @@ CREATE TABLE hubert_conversations (
 ```
 
 Indexes:
+
 - `hubert_conversations_owner_idx` on `(owner_user_id, created_at DESC)`
 
 Rule:
+
 - Application layer blocks access in `auth` mode.
 
 ---
 
 ## 3.7 `hubert_messages` (Demo Mode)
+
 Message log for Hubert chat sessions.
 
 ```sql
@@ -241,6 +258,7 @@ CREATE TABLE hubert_messages (
 ```
 
 Indexes:
+
 - `hubert_messages_conversation_idx` on `(conversation_id, created_at)`
 
 ---
@@ -250,7 +268,7 @@ Indexes:
 The LLM Guesser should map source columns into this canonical field set:
 
 - `contract_number`
-- `advertiser_name` *(required)*
+- `advertiser_name` _(required)_
 - `property_owner_name`
 - `billboard_code`
 - `billboard_type`
@@ -259,7 +277,7 @@ The LLM Guesser should map source columns into this canonical field set:
 - `latitude`
 - `longitude`
 - `start_date`
-- `expiry_date` *(required)*
+- `expiry_date` _(required)_
 - `monthly_rent_net`
 - `monthly_rent_gross`
 - `currency`
@@ -298,4 +316,3 @@ Planned Row-Level Security strategy:
 - Whether to support team accounts (organization/workspace) in v1 or post-v1.
 - Whether geospatial indexing (PostGIS) is needed now or in demo phase.
 - Whether contract financials should split into separate normalized revenue tables.
-

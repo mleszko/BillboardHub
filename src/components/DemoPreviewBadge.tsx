@@ -20,7 +20,8 @@ export function DemoPreviewBadge({ className }: { className?: string }) {
           Upcoming Features Preview
         </span>
         <span className="ml-1.5 text-muted-foreground">
-          Te funkcje są w fazie demo. Po zalogowaniu zobaczysz tylko stabilny rdzeń: tabela umów, importer, alerty.
+          Te funkcje są w fazie demo. Po zalogowaniu zobaczysz tylko stabilny rdzeń: tabela umów,
+          importer, alerty.
         </span>
       </div>
     </div>
