@@ -37,3 +37,12 @@ def test_parse_date_multiline_range() -> None:
     assert parse_date("14.04.2026\n-09.09.2027") == date(2027, 9, 9)
     assert parse_date("14.04.2026-\n01.12.2027") == date(2027, 12, 1)
     assert parse_date("14.04.2026 - 09.09.2027") == date(2027, 9, 9)
+
+
+def test_parse_date_open_ended_term_keyword() -> None:
+    assert parse_date("umowa na czas nieokreślony") is None
+    assert parse_date("UMOWA NA CZAS NIEOKRESLONY") is None
+
+
+def test_parse_date_open_ended_term_keyword_multiline() -> None:
+    assert parse_date("umowa na czas\nnieokreślony, bez terminu końca") is None

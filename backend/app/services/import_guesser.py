@@ -250,6 +250,11 @@ def _parse_polish_duration_or_range(text: str) -> date | None:
     return None
 
 
+def _contains_open_ended_term(text: str) -> bool:
+    folded = _fold_ascii_lower(text)
+    return re.search(r"\bnieokreslon[a-z]*\b", folded) is not None
+
+
 def parse_decimal(value: Any) -> Decimal | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -318,6 +323,8 @@ def parse_date(value: Any) -> date | None:
 
     s = str(value).strip()
     if not s or s in {"0", "-", "—", "?", "…", ".."}:
+        return None
+    if _contains_open_ended_term(s):
         return None
     parsed = pd.to_datetime(s, errors="coerce", dayfirst=True)
     if pd.isna(parsed):
