@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "sh -c 'node ./node_modules/serve/build/main.js -s dist/client -l ${PORT}'",
+    "startCommand": "sh -c 'HOST=0.0.0.0 PORT=${PORT} node dist/server/server.js'",
     "healthcheckPath": "/",
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
