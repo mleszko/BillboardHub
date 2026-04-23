@@ -1,0 +1,17 @@
+---
+description: Fast autoship workflow for git commit and push
+alwaysApply: true
+---
+
+# Git Autoship Workflow
+
+- Do not create commits or push by default.
+- Treat the phrase `autoship` in a user message as explicit permission to:
+  1) stage relevant changes,
+  2) create a commit,
+  3) push current branch to origin.
+- Before autoship, run quick checks for changed scope (lint/tests if available).
+- Never commit secrets (`.env`, credentials, tokens, private keys).
+- Never use destructive git operations (`reset --hard`, force push) unless user explicitly asks.
+- After autoship, report commit hash, branch, and pushed remote ref.
+
