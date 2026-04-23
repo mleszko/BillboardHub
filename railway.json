@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "sh -c 'HOST=0.0.0.0 PORT=${PORT} node dist/server/server.js'",
+    "startCommand": "sh -c 'HOST=0.0.0.0 PORT=${PORT} node scripts/railway-ssr.mjs'",
     "healthcheckPath": "/",
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
