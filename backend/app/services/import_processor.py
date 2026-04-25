@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -145,7 +146,19 @@ def _coerce_billboard_type(raw: Any) -> BillboardType:
 
 
 def _to_json_safe(value: Any) -> Any:
-    return json.loads(json.dumps(value, default=str))
+    def _sanitize_json_value(raw: Any) -> Any:
+        if isinstance(raw, float):
+            if math.isnan(raw) or math.isinf(raw):
+                return None
+            return raw
+        if isinstance(raw, dict):
+            return {str(key): _sanitize_json_value(val) for key, val in raw.items()}
+        if isinstance(raw, (list, tuple, set)):
+            return [_sanitize_json_value(item) for item in raw]
+        return raw
+
+    sanitized = _sanitize_json_value(value)
+    return json.loads(json.dumps(sanitized, default=str, allow_nan=False))
 
 
 def _raw_row_excerpt(raw_row: dict[str, Any], max_items: int = 4) -> dict[str, Any]:

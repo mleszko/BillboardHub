@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
 from app.main import app
+from app.services.import_processor import _to_json_safe
 
 _DEV_HEADERS = {
     "x-dev-user-id": "import-dedupe-user",
@@ -333,3 +334,20 @@ def test_import_coerces_numeric_phone_to_string() -> None:
         item = next((row for row in listed.json()["items"] if row["advertiser_name"] == "Klient Tel"), None)
         assert item is not None
         assert item["contact_phone"] == "602237688"
+
+
+def test_to_json_safe_replaces_nan_and_inf_with_null() -> None:
+    payload = {
+        "plain_nan": float("nan"),
+        "plain_inf": float("inf"),
+        "plain_neg_inf": float("-inf"),
+        "nested": [1, float("nan"), {"value": float("inf")}],
+    }
+
+    safe = _to_json_safe(payload)
+
+    assert safe["plain_nan"] is None
+    assert safe["plain_inf"] is None
+    assert safe["plain_neg_inf"] is None
+    assert safe["nested"][1] is None
+    assert safe["nested"][2]["value"] is None
