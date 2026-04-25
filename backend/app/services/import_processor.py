@@ -31,11 +31,40 @@ def normalize_value(target_field_name: str, value: Any) -> Any:
         "total_contract_value_net",
         "vat_rate",
     }
+    text_fields = {
+        "contract_number",
+        "advertiser_name",
+        "property_owner_name",
+        "billboard_code",
+        "billboard_type",
+        "surface_size",
+        "location_address",
+        "city",
+        "currency",
+        "contact_person",
+        "contact_phone",
+        "contact_email",
+        "notes",
+    }
 
     if target_field_name in date_fields:
         return parse_date(value)
     if target_field_name in decimal_fields:
         return parse_decimal(value)
+    if target_field_name in text_fields:
+        if value is None:
+            return None
+        if isinstance(value, float):
+            if value != value:
+                return None
+            if value.is_integer():
+                as_str = str(int(value))
+            else:
+                as_str = str(value)
+            stripped = as_str.strip()
+            return stripped or None
+        as_str = str(value).strip()
+        return as_str or None
     if isinstance(value, str):
         stripped = value.strip()
         return stripped or None

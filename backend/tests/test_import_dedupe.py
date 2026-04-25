@@ -281,3 +281,55 @@ def test_confirm_mapping_blocks_lp_contract_number_in_multisheet() -> None:
         assert len(matching) >= 2
         assert {"Klient A", "Klient B"}.issubset({item["advertiser_name"] for item in matching})
         assert all(item["contract_number"] in (None, "") for item in matching)
+
+
+def test_import_coerces_numeric_phone_to_string() -> None:
+    csv_with_numeric_phone = (
+        "Najemca,Miasto,Adres,Data_wygasniecia,Telefon osoby kontaktowej\n"
+        "Klient Tel,Suwałki,Utrata 1,2026-12-31,602237688\n"
+    ).encode("utf-8")
+    with TestClient(app) as client:
+        client.get("/health")
+        guess = client.post(
+            "/imports/guess-mapping",
+            headers=_DEV_HEADERS,
+            files={"file": ("phone.csv", csv_with_numeric_phone, "text/csv")},
+            data={
+                "sheet_name": "",
+                "header_row_1based": "0",
+                "skip_rows_before_header": "0",
+                "unpivot_month_columns": "false",
+                "monthly_aggregate": "mean",
+            },
+        )
+        assert guess.status_code == 200, guess.text
+        proposal = guess.json()
+        payload = {
+            "session_id": proposal["session_id"],
+            "owner_user_id": proposal["owner_user_id"],
+            "mapping": [
+                {
+                    "source_column_name": m["source_column_name"],
+                    "target_field_name": (
+                        "contact_phone"
+                        if m["source_column_name"] == "Telefon osoby kontaktowej"
+                        else m["target_field_name"]
+                    ),
+                    "confirmed_by_user": True,
+                    "user_override": m["source_column_name"] == "Telefon osoby kontaktowej",
+                    "transform_hint": m.get("transform_hint"),
+                }
+                for m in proposal["mapping_suggestions"]
+            ],
+        }
+        confirm = client.post("/imports/confirm-mapping", headers=_DEV_HEADERS, json=payload)
+        assert confirm.status_code == 200, confirm.text
+        result = confirm.json()
+        assert result["status"] == "completed"
+        assert result["imported_rows"] >= 1
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        item = next((row for row in listed.json()["items"] if row["advertiser_name"] == "Klient Tel"), None)
+        assert item is not None
+        assert item["contact_phone"] == "602237688"
