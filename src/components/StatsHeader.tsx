@@ -6,12 +6,19 @@ import { cn } from "@/lib/utils";
 type StatsHeaderData = {
   total: number;
   occupancy: number;
-  monthlyValue: number;
+  monthlyValue?: number;
+  monthlyRevenue?: number;
   expiring30: number;
 };
 
 export function StatsHeader({ data }: { data?: StatsHeaderData }) {
   const s = data ?? stats();
+  const monthlyValue =
+    typeof s.monthlyValue === "number"
+      ? s.monthlyValue
+      : typeof s.monthlyRevenue === "number"
+        ? s.monthlyRevenue
+        : 0;
   const items = [
     {
       label: "Total Billboards",
@@ -29,7 +36,7 @@ export function StatsHeader({ data }: { data?: StatsHeaderData }) {
     },
     {
       label: "Wartość umów / mc",
-      value: formatPLN(s.monthlyValue),
+      value: formatPLN(monthlyValue),
       delta: data ? "Suma czynszów netto" : "+12% MoM",
       icon: TrendingUp,
       tone: "success" as const,
