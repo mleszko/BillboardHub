@@ -2,6 +2,11 @@
 
 BillboardHub is evolving from a quick mock into a production-ready SaaS for billboard contract management.
 
+## License
+
+This code is published under the **PolyForm Noncommercial License 1.0.0** (see `LICENSE`).
+You can use, modify, and share it for noncommercial purposes, but you cannot use it to make money without a separate commercial agreement.
+
 This repository currently contains:
 
 - active UI (TanStack + Vite app in repo root),
