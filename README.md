@@ -15,7 +15,8 @@ This repository currently contains:
 - **Auth**: Supabase Auth (email/password)
 - **AI**:
   - GPT-4o-powered Excel header mapping (with robust fallback heuristics)
-  - Hubert demo advisor constrained to billboard/ROI/property strategy
+  - Hubert advisor for both Auth and Demo modes (domain-limited to billboard operations/ROI/location strategy)
+  - AI-powered custom contract columns (text/number outputs)
 
 ## Key Implemented Flows
 
@@ -36,14 +37,23 @@ Backend endpoints:
 ### 2) Auth Mode Contracts
 
 - `GET /contracts` returns the stable contract list
-- Frontend `/auth/contracts` renders an ascetic contracts table
+- Payload includes active `custom_columns` and per-contract `custom_values`
+- Frontend `/contracts` renders the operational contracts table
+- Contracts list includes dynamic AI custom columns and "Nowa kolumna AI" creation flow
 
-### 3) Demo Mode Hubert
+### 3) Hubert Advisor (Auth + Demo)
 
 - `POST /hubert/ask`
-- Demo-mode only
-- domain constrained to billboard ROI and property strategy
-- gamified, encouraging tone
+- domain constrained to billboard operations, ROI, pricing, and location strategy
+- Auth mode: practical advisory tone with contract-metric explanations and clarifying questions
+- Demo mode: gamified, encouraging tone
+
+### 4) Custom AI Columns
+
+- `GET /contracts/custom-columns`
+- `POST /contracts/custom-columns`
+- New column creation recomputes values for existing contracts
+- Results are exposed in `/contracts` list view (`pending` / `computed` / `failed`)
 
 ## Local Development
 
@@ -108,6 +118,19 @@ Git commit hook (no push) runs automatically via Husky and executes:
 Notes:
 
 - `dev:all` runs the active Vite frontend at `http://localhost:5173` and backend at `http://localhost:8000`.
+
+### Cursor Cloud Agent bootstrap
+
+This repository includes Cloud Agent environment bootstrap config:
+
+- `/.cursor/environment.json` (install hook)
+- `/.cursor/scripts/start-agent.sh` (dependency bootstrap)
+
+The bootstrap script ensures:
+
+- Node dependencies are installed via `npm ci` (from `package-lock.json`)
+- `backend/.venv/bin/python` exists and is executable in agent environments
+- backend Python dependencies are installed from `backend/requirements.txt`
 
 ## Environment Setup
 

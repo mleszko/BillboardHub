@@ -214,9 +214,9 @@ Constraint:
 
 ---
 
-## 3.6 `hubert_conversations` (Demo Mode)
+## 3.6 `hubert_conversations`
 
-Conversation thread metadata for demo-only Hubert advisor.
+Conversation thread metadata for Hubert advisor (supports `auth` and `demo` mode).
 
 ```sql
 CREATE TABLE hubert_conversations (
@@ -236,13 +236,13 @@ Indexes:
 
 Rule:
 
-- Application layer blocks access in `auth` mode.
+- Application layer can apply mode-specific policies while persisting both `auth` and `demo`.
 
 ---
 
-## 3.7 `hubert_messages` (Demo Mode)
+## 3.7 `hubert_messages`
 
-Message log for Hubert chat sessions.
+Message log for Hubert chat sessions (`auth` and `demo` conversations).
 
 ```sql
 CREATE TABLE hubert_messages (
@@ -260,6 +260,59 @@ CREATE TABLE hubert_messages (
 Indexes:
 
 - `hubert_messages_conversation_idx` on `(conversation_id, created_at)`
+
+---
+
+## 3.8 `contract_custom_columns`
+
+User-defined AI-computed columns for contracts list analysis.
+
+```sql
+CREATE TABLE contract_custom_columns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  prompt_template TEXT NOT NULL,
+  output_type TEXT NOT NULL CHECK (output_type IN ('text', 'number')),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Indexes:
+
+- `contract_custom_columns_owner_idx` on `(owner_user_id, created_at DESC)`
+
+---
+
+## 3.9 `contract_custom_values`
+
+Computed values for each active custom AI column per contract row.
+
+```sql
+CREATE TABLE contract_custom_values (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  contract_id UUID NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  column_id UUID NOT NULL REFERENCES contract_custom_columns(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'computed', 'failed')),
+  value_text TEXT,
+  value_number NUMERIC(14,4),
+  value_json JSONB,
+  error_message TEXT,
+  computed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (contract_id, column_id)
+);
+```
+
+Indexes:
+
+- `contract_custom_values_owner_idx` on `(owner_user_id)`
+- `contract_custom_values_contract_idx` on `(contract_id)`
+- `contract_custom_values_column_idx` on `(column_id)`
 
 ---
 
@@ -295,7 +348,7 @@ Planned Row-Level Security strategy:
 - Enable RLS on all `public` tables.
 - Policy baseline: `owner_user_id = auth.uid()` for select/insert/update/delete.
 - `profiles` uses `user_id = auth.uid()`.
-- Demo tables (`hubert_*`) additionally require app mode checks in backend service layer.
+- Hubert tables (`hubert_*`) can be additionally constrained by mode-specific checks in backend service layer.
 
 ---
 
@@ -315,4 +368,4 @@ Planned Row-Level Security strategy:
 
 - Whether to support team accounts (organization/workspace) in v1 or post-v1.
 - Whether geospatial indexing (PostGIS) is needed now or in demo phase.
-- Whether contract financials should split into separate normalized revenue tables.
+- Whether contract financials should split into separate normalized value tables.

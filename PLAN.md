@@ -18,7 +18,7 @@ To enable uninterrupted delivery, work will proceed under the following operatin
 - API contract shapes, internal folder structure, naming, and migration ordering.
 - Validation rules for import pipeline (date/currency normalization, required-field checks).
 - UI workflow details for mapping confirmation and dashboard ergonomics.
-- Demo-mode UX copy/tone for Hubert, as long as it remains domain-limited to billboards/ROI/property strategy.
+- Demo-mode UX copy/tone for Hubert, as long as it remains domain-limited to billboard operations, ROI, pricing, and location strategy.
 
 ### Non-Negotiable Guardrails
 
@@ -134,16 +134,15 @@ To enable uninterrupted delivery, work will proceed under the following operatin
 ### Deliverables
 
 - **Leaflet map** with billboard markers and quick stats overlays.
-- **Hubert AI Widget** (demo-only persona):
-  - Billboards/ROI/property strategy domain-only responses.
-  - Energetic, gamified encouragement tone (e.g. "Białostocki Baron Bilbordów").
+- **Hubert AI Widget**:
+  - Auth mode: practical advisor for contract-metric calculations, targeted follow-up questions before placement recommendations, and visibility/value-oriented billboard evaluation.
+  - Demo mode: domain-limited billboard/ROI/location persona with energetic, gamified encouragement tone (e.g. "Białostocki Baron Bilbordów").
 - **Street View mockups** for selected billboard locations.
 - Demo toggle and seeded demo data paths.
 
 ### Safety & Isolation
 
-- Demo features strictly mode-gated.
-- Dedicated prompt policies for Hubert to avoid off-domain drift.
+- Prompt policies for Hubert keep responses inside billboard operations, contracts, pricing, ROI, and location strategy.
 - Clear UI labeling that demo analytics are illustrative when mocked.
 
 ---
