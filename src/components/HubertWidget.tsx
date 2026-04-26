@@ -31,10 +31,16 @@ interface ContractsResponse {
   }>;
 }
 
+interface HubertAskResponse {
+  conversation_id: string | null;
+  response: string;
+  mode: string;
+}
+
 interface LiveSummary {
   total: number;
   expiring30: number;
-  monthlyRevenue: number;
+  monthlyValue: number;
   occupancy: number;
   topExpiring: { advertiser: string; ref: string | null; days: number } | null;
 }
@@ -75,7 +81,7 @@ const SCRIPTED: {
 ];
 
 const OFFTOPIC_REPLY =
-  "Skupiam się wyłącznie na strategii i danych Twojego portfela billboardów. Spróbuj zapytać o ROI, wygasające umowy, ceny rynkowe lub obłożenie.";
+  "Skupiam się na umowach i strategii billboardowej. Mogę wyjaśnić obliczenia wartości umów, pomóc wybrać lokalizację i ocenić nośniki.";
 
 function hubertReply(input: string): string {
   const ctx = stats();
@@ -89,7 +95,7 @@ function hubertReply(input: string): string {
   ) {
     return OFFTOPIC_REPLY;
   }
-  return `Analizuję dane portfela… Twoja sytuacja wygląda stabilnie: ${ctx.occupancy}% obłożenia, ${formatPLN(ctx.monthlyRevenue)} przychodu/mc. Doprecyzuj pytanie — interesuje Cię ROI, wygasające umowy, ceny czy strategia?`;
+  return `Analizuję dane portfela… Twoja sytuacja wygląda stabilnie: ${ctx.occupancy}% obłożenia, ${formatPLN(ctx.monthlyRevenue)} wartości umów/mc. Doprecyzuj pytanie — interesuje Cię ROI, wygasające umowy, ceny czy strategia?`;
 }
 
 function hubertReplyFromLive(input: string, summary: LiveSummary): string {
@@ -101,8 +107,8 @@ function hubertReplyFromLive(input: string, summary: LiveSummary): string {
     }
     return "W tym momencie nie masz umów wygasających w ciągu 30 dni.";
   }
-  if (/(przych|revenue|obrót|cash|cena|price)/i.test(input)) {
-    return `Z Twoich aktualnych kontraktów wynika przychód około ${formatPLN(summary.monthlyRevenue)}/mc.`;
+  if (/(przych|revenue|obrót|cash|cena|price|wartość|koszt|czynsz|opłat)/i.test(input)) {
+    return `Z Twoich aktualnych kontraktów wynika wartość umów około ${formatPLN(summary.monthlyValue)}/mc.`;
   }
   if (/(occupanc|obłoż|zaję)/i.test(input)) {
     return `Aktualne obłożenie portfela to około ${summary.occupancy}%.`;
@@ -111,13 +117,13 @@ function hubertReplyFromLive(input: string, summary: LiveSummary): string {
     return "Na tym etapie mogę oszacować trendy z Twoich kontraktów i wygaśnięć. Jeśli chcesz, policzę prostą estymację ROI dla wybranych lokalizacji.";
   }
   if (
-    !/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|roi|wygas|cena|obłoż)/i.test(
+    !/(billboard|nośnik|umow|klient|miasto|reklam|outdoor|portfel|roi|wygas|cena|obłoż|wartość|koszt|czynsz)/i.test(
       input,
     )
   ) {
     return OFFTOPIC_REPLY;
   }
-  return `Widzę obecnie ${summary.total} kontraktów, ${summary.expiring30} pilnych wygaśnięć i przychód ${formatPLN(summary.monthlyRevenue)}/mc. Doprecyzuj: renewal, ceny czy priorytety na ten tydzień?`;
+  return `Widzę obecnie ${summary.total} kontraktów, ${summary.expiring30} pilnych wygaśnięć i wartość umów ${formatPLN(summary.monthlyValue)}/mc. Doprecyzuj: renewal, ceny czy priorytety na ten tydzień?`;
 }
 
 export function HubertWidget() {
@@ -126,6 +132,7 @@ export function HubertWidget() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [liveSummary, setLiveSummary] = useState<LiveSummary | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const demo = isDemoMode();
   const { user, loading: authLoading } = useAuth();
@@ -156,12 +163,12 @@ export function HubertWidget() {
         const topExpiring = withDays
           .filter((i) => !i.expiry_unknown && i.days >= 0)
           .sort((a, b) => a.days - b.days)[0];
-        const monthlyRevenue = items.reduce((sum, i) => sum + (i.monthly_rent_net || 0), 0);
+        const monthlyValue = items.reduce((sum, i) => sum + (i.monthly_rent_net || 0), 0);
         const occupancy = items.length > 0 ? 100 : 0;
         setLiveSummary({
           total: items.length,
           expiring30,
-          monthlyRevenue,
+          monthlyValue,
           occupancy,
           topExpiring: topExpiring
             ? {
@@ -206,8 +213,8 @@ export function HubertWidget() {
             ? `Cześć ${firstName}! Jestem Hubert. **Zaimportuj umowy** z Excela — wtedy podpowiem na podstawie Twoich realnych danych.`
             : `Cześć! Jestem Hubert. **Zaimportuj umowy** z Excela — wtedy podpowiem na podstawie Twoich realnych danych.`
           : firstName
-            ? `Cześć ${firstName}! Jestem Hubert. Widzę **${liveSummary?.total ?? 0} kontraktów** w koncie, przychód ok. **${formatPLN(liveSummary?.monthlyRevenue ?? 0)}**/mc — pytaj o renewal, stawki lub priorytety.`
-            : `Cześć! Jestem Hubert. Widzę **${liveSummary?.total ?? 0} kontraktów** w koncie, przychód ok. **${formatPLN(liveSummary?.monthlyRevenue ?? 0)}**/mc — pytaj o renewal, stawki lub priorytety.`;
+            ? `Cześć ${firstName}! Jestem Hubert. Widzę **${liveSummary?.total ?? 0} kontraktów** w koncie, wartość umów ok. **${formatPLN(liveSummary?.monthlyValue ?? 0)}**/mc — pytaj o obliczenia umów, stawki, lokalizacje i priorytety.`
+            : `Cześć! Jestem Hubert. Widzę **${liveSummary?.total ?? 0} kontraktów** w koncie, wartość umów ok. **${formatPLN(liveSummary?.monthlyValue ?? 0)}**/mc — pytaj o obliczenia umów, stawki, lokalizacje i priorytety.`;
       setMessages([
         {
           id: 1,
@@ -234,13 +241,45 @@ export function HubertWidget() {
     const userMsg: Msg = { id: Date.now(), role: "user", text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
-    setTimeout(() => {
-      const answer = demo
-        ? hubertReply(text)
-        : liveSummary
-          ? hubertReplyFromLive(text, liveSummary)
-          : "Ładuję Twoje dane kontraktowe. Spróbuj ponownie za kilka sekund.";
-      setMessages((m) => [...m, { id: Date.now() + 1, role: "hubert", text: answer }]);
+    setTimeout(async () => {
+      if (demo) {
+        const answer = hubertReply(text);
+        setMessages((m) => [...m, { id: Date.now() + 1, role: "hubert", text: answer }]);
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/hubert/ask`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(await getBackendAuthHeaders()),
+          },
+          body: JSON.stringify({
+            message: text,
+            conversation_id: conversationId,
+            mode: "auth",
+          }),
+        });
+        if (response.ok) {
+          const payload = (await response.json()) as HubertAskResponse;
+          setConversationId(payload.conversation_id);
+          setMessages((m) => [
+            ...m,
+            {
+              id: Date.now() + 1,
+              role: "hubert",
+              text: payload.response,
+            },
+          ]);
+          return;
+        }
+      } catch {
+        // Fall back to local logic below.
+      }
+      const fallback = liveSummary
+        ? hubertReplyFromLive(text, liveSummary)
+        : "Ładuję Twoje dane kontraktowe. Spróbuj ponownie za kilka sekund.";
+      setMessages((m) => [...m, { id: Date.now() + 1, role: "hubert", text: fallback }]);
     }, 600);
   };
 
@@ -285,7 +324,7 @@ export function HubertWidget() {
 
           <div className="flex items-start gap-1.5 border-b bg-info/5 px-3 py-1.5 text-[10.5px] text-muted-foreground">
             <Info className="mt-0.5 h-3 w-3 shrink-0 text-info" />
-            <span>Hubert rozmawia tylko o strategii i danych Twoich billboardów.</span>
+            <span>Hubert pomaga w strategii, obliczeniach umów i ocenie lokalizacji/nośników.</span>
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-muted/30 p-3">
@@ -330,7 +369,7 @@ export function HubertWidget() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") send();
               }}
-              placeholder="Zapytaj o ROI, wygasające umowy…"
+              placeholder="Zapytaj o wartość umów, ROI, lokalizacje…"
               className="h-9 text-sm"
             />
             <Button size="icon" onClick={send} className="h-9 w-9 shrink-0">

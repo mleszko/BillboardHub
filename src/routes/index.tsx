@@ -23,7 +23,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Platforma do zarządzania umowami, wygaśnięciami i przychodami dla deweloperów budynków. Przejrzysty interfejs, AI-doradca Hubert i mapa lokalizacji. Wersja demo dostępna od ręki.",
+          "Platforma do zarządzania umowami, wygaśnięciami i wartością umów dla deweloperów budynków. Przejrzysty interfejs, AI-doradca Hubert i mapa lokalizacji. Wersja demo dostępna od ręki.",
       },
       {
         property: "og:title",
@@ -138,7 +138,7 @@ function LandingPage() {
                       <span className="font-semibold text-success">
                         ROI jest 15% powyżej średniej regionalnej
                       </span>
-                      . Dobra robota — masz potencjał na +8% przychodu po optymalizacji renewal.
+                      . Dobra robota — masz potencjał na +8% wartości umów po optymalizacji renewal.
                     </p>
                   </div>
                 </div>

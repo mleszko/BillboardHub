@@ -97,8 +97,8 @@ export function HubertWelcomePanel({ liveSummary, portfolioCities }: HubertWelco
             {useLive ? (
               <>
                 Widzisz <strong>{s.total}</strong>{" "}
-                {s.total === 1 ? "aktywny kontrakt" : "aktywnych kontraktów"}, szacowany przychód{" "}
-                <strong>{formatPLN(s.monthlyRevenue)}</strong> miesięcznie oraz{" "}
+                {s.total === 1 ? "aktywny kontrakt" : "aktywnych kontraktów"}, szacowana wartość
+                umów <strong>{formatPLN(s.monthlyRevenue)}</strong> miesięcznie oraz{" "}
                 <strong>{s.expiring30}</strong>{" "}
                 {s.expiring30 === 1
                   ? "umowę wymagającą uwagi w ciągu 30 dni"
@@ -116,7 +116,7 @@ export function HubertWelcomePanel({ liveSummary, portfolioCities }: HubertWelco
               <>
                 Twoje{" "}
                 <strong className="text-success">ROI jest 15% powyżej średniej regionalnej</strong>{" "}
-                — jesteś profesjonalistą! Obłożenie {s.occupancy}%, przychód{" "}
+                — jesteś profesjonalistą! Obłożenie {s.occupancy}%, wartość umów{" "}
                 {formatPLN(s.monthlyRevenue)}
                 /mc. Mam {s.expiring30} pilne sprawy do omówienia.
               </>
