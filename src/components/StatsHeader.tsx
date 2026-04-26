@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 type StatsHeaderData = {
   total: number;
   occupancy: number;
-  monthlyRevenue: number;
+  monthlyValue: number;
   expiring30: number;
 };
 
@@ -28,8 +28,8 @@ export function StatsHeader({ data }: { data?: StatsHeaderData }) {
       tone: "success" as const,
     },
     {
-      label: "Monthly Revenue",
-      value: formatPLN(s.monthlyRevenue),
+      label: "Wartość umów / mc",
+      value: formatPLN(s.monthlyValue),
       delta: data ? "Suma czynszów netto" : "+12% MoM",
       icon: TrendingUp,
       tone: "success" as const,

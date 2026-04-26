@@ -32,7 +32,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Platforma do zarządzania umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+          "Platforma do zarządzania umowami, lokalizacjami i wartością umów dla deweloperów budynków.",
       },
       { name: "author", content: "BillboardHub" },
       {
@@ -52,17 +52,17 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i wartością umów dla deweloperów budynków.",
       },
       {
         property: "og:description",
         content:
-          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i wartością umów dla deweloperów budynków.",
       },
       {
         name: "twitter:description",
         content:
-          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i przychodami dla deweloperów budynków.",
+          "BillboardHub usprawnia zarządzanie umowami, lokalizacjami i wartością umów dla deweloperów budynków.",
       },
       {
         property: "og:image",

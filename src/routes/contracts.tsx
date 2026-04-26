@@ -36,6 +36,8 @@ import { isDemoMode } from "@/lib/demo";
 import { getBillboards, useBillboards } from "@/lib/data-store";
 import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
+import { useBackendProfile } from "@/hooks/use-backend-profile";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   billingMonthsCount,
   buildPaymentSchedule,
@@ -79,10 +81,28 @@ type BackendContract = {
   contact_phone?: string | null;
   contact_email?: string | null;
   notes?: string | null;
+  custom_values?: Record<string, ContractCustomValue>;
 };
 
 type ContractsResponse = {
   items: BackendContract[];
+  custom_columns?: ContractCustomColumn[];
+};
+
+type ContractCustomColumn = {
+  id: string;
+  name: string;
+  prompt_template: string;
+  output_type: "text" | "number";
+  is_active: boolean;
+};
+
+type ContractCustomValue = {
+  status: "pending" | "computed" | "failed";
+  value_text?: string | null;
+  value_number?: number | null;
+  error_message?: string | null;
+  computed_at?: string | null;
 };
 
 type ContractRow = {
@@ -104,6 +124,7 @@ type ContractRow = {
   notes: string | null;
   totalContractValue: number | null;
   periodEstimate: number;
+  customValues: Record<string, ContractCustomValue>;
 };
 
 const API_BASE_URL =
@@ -127,6 +148,15 @@ function statusFromBackend(
 
 function rowMatchesQuery(row: ContractRow, ql: string): boolean {
   if (!ql) return true;
+  const customHay = Object.values(row.customValues)
+    .map((value) => {
+      if (value.status === "computed") {
+        if (typeof value.value_number === "number") return value.value_number.toString();
+        return value.value_text || "";
+      }
+      return value.error_message || value.status;
+    })
+    .join(" ");
   const hay = [
     row.code,
     row.client,
@@ -138,6 +168,7 @@ function rowMatchesQuery(row: ContractRow, ql: string): boolean {
     row.contactPhone,
     row.contactEmail,
     row.notes,
+    customHay,
   ]
     .filter(Boolean)
     .join(" ")
@@ -289,6 +320,7 @@ function ContractsPage() {
   const [demo, setDemo] = useState(false);
   const [backendRows, setBackendRows] = useState<ContractRow[]>([]);
   const [backendRawItems, setBackendRawItems] = useState<BackendContract[]>([]);
+  const [customColumns, setCustomColumns] = useState<ContractCustomColumn[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -305,7 +337,14 @@ function ContractsPage() {
   const [contractDialogInitial, setContractDialogInitial] = useState<ContractFormValues | null>(
     null,
   );
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [customCreateBusy, setCustomCreateBusy] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [customOutputType, setCustomOutputType] = useState<"text" | "number">("text");
   const { data: demoBillboardRows } = useBillboards();
+  const { user } = useAuth();
+  const { profile } = useBackendProfile();
 
   useEffect(() => {
     setDemo(isDemoMode());
@@ -336,7 +375,9 @@ function ContractsPage() {
       }
       const payload = (await response.json()) as ContractsResponse;
       const items = payload.items ?? [];
+      const columns = (payload.custom_columns ?? []).filter((column) => column.is_active);
       setBackendRawItems(items);
+      setCustomColumns(columns);
       const monthly = (item: BackendContract) => item.monthly_rent_net || 0;
       const mapped: ContractRow[] = items.map((item) => ({
         id: item.id,
@@ -357,6 +398,7 @@ function ContractsPage() {
         contactEmail: item.contact_email?.trim() || null,
         notes: item.notes?.trim() || null,
         totalContractValue: item.total_contract_value_net ?? null,
+        customValues: item.custom_values ?? {},
         periodEstimate: estimatedPeriodValue(
           monthly(item),
           item.start_date,
@@ -369,6 +411,7 @@ function ContractsPage() {
     } catch (err) {
       setBackendRows([]);
       setBackendRawItems([]);
+      setCustomColumns([]);
       setLoadError(err instanceof Error ? err.message : "Błąd ładowania kontraktów.");
     } finally {
       setReady(true);
@@ -487,6 +530,7 @@ function ContractsPage() {
                 contactEmail: null,
                 notes: null,
                 totalContractValue: null,
+                customValues: {},
                 periodEstimate: estimatedPeriodValue(
                   b.monthlyPrice,
                   start,
@@ -519,6 +563,96 @@ function ContractsPage() {
     });
   }, [sourceRows, q, city, client, status]);
 
+  const renderCustomValue = useCallback((row: ContractRow, column: ContractCustomColumn) => {
+    const value = row.customValues[column.id];
+    if (!value) {
+      return <span className="text-muted-foreground">—</span>;
+    }
+    if (value.status === "pending") {
+      return <span className="text-muted-foreground">w trakcie</span>;
+    }
+    if (value.status === "failed") {
+      return (
+        <span className="text-destructive" title={value.error_message || "Błąd obliczania"}>
+          błąd
+        </span>
+      );
+    }
+    if (typeof value.value_number === "number") {
+      return <span className="tabular-nums">{value.value_number.toLocaleString("pl-PL")}</span>;
+    }
+    return <span>{value.value_text || "—"}</span>;
+  }, []);
+
+  const openCustomColumnDialog = () => {
+    setCustomName("");
+    setCustomPrompt("");
+    setCustomOutputType("text");
+    setCustomDialogOpen(true);
+  };
+
+  const createCustomColumn = useCallback(async () => {
+    if (demo) return;
+    const headers = await getBackendAuthHeaders();
+    let ownerUserId = profile?.user_id || user?.id;
+    if (!ownerUserId) {
+      try {
+        const meResponse = await fetch(`${API_BASE_URL}/auth/me`, { headers });
+        if (meResponse.ok) {
+          const me = (await meResponse.json()) as { user_id?: string };
+          ownerUserId = me.user_id || null;
+        }
+      } catch {
+        // Surface a user-facing error below if we still do not have user id.
+      }
+    }
+    if (!ownerUserId) {
+      toast.error("Nie udało się ustalić użytkownika dla nowej kolumny AI.");
+      return;
+    }
+    const name = customName.trim();
+    const prompt = customPrompt.trim();
+    if (!name || !prompt) {
+      toast.error("Uzupełnij nazwę kolumny i prompt.");
+      return;
+    }
+    setCustomCreateBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts/custom-columns`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify({
+          owner_user_id: ownerUserId,
+          name,
+          prompt_template: prompt,
+          output_type: customOutputType,
+        }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się utworzyć kolumny AI.");
+      }
+      toast.success("Kolumna AI została utworzona. Trwa obliczanie wartości.");
+      setCustomDialogOpen(false);
+      await reloadBackendRows();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Błąd tworzenia kolumny AI.");
+    } finally {
+      setCustomCreateBusy(false);
+    }
+  }, [
+    customName,
+    customOutputType,
+    customPrompt,
+    demo,
+    profile?.user_id,
+    reloadBackendRows,
+    user?.id,
+  ]);
+
   const viewTotals = useMemo(() => {
     const sumMonthly = rows.reduce((s, r) => s + r.monthlyPrice, 0);
     const sumPeriod = rows.reduce((s, r) => s + r.periodEstimate, 0);
@@ -541,6 +675,18 @@ function ContractsPage() {
               <span className="sm:hidden">Import</span>
             </Link>
           </Button>
+          {!demo && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={openCustomColumnDialog}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Nowa kolumna AI</span>
+              <span className="sm:hidden">Kolumna AI</span>
+            </Button>
+          )}
           {!demo && (
             <Button
               size="sm"
@@ -576,6 +722,89 @@ function ContractsPage() {
           initial={contractDialogInitial}
           onSaved={() => void reloadBackendRows()}
         />
+
+        <Dialog
+          open={customDialogOpen}
+          onOpenChange={(open) => {
+            if (!open && !customCreateBusy) setCustomDialogOpen(false);
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Nowa kolumna AI</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Wynik będzie obliczany dla każdej umowy i widoczny tylko na liście contracts.
+              </p>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground" htmlFor="custom-column-name">
+                  Nazwa kolumny
+                </label>
+                <Input
+                  id="custom-column-name"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="np. Potencjał widoczności"
+                  disabled={customCreateBusy}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="custom-column-output-type"
+                >
+                  Typ wyniku
+                </label>
+                <Select
+                  value={customOutputType}
+                  onValueChange={(value) => setCustomOutputType(value as "text" | "number")}
+                >
+                  <SelectTrigger id="custom-column-output-type">
+                    <SelectValue placeholder="Typ wyniku" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Tekst</SelectItem>
+                    <SelectItem value="number">Liczba</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="custom-column-prompt"
+                >
+                  Instrukcja dla AI
+                </label>
+                <textarea
+                  id="custom-column-prompt"
+                  className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder="np. Oceń wartość lokalizacji w skali 1-10 na bazie miasta, typu nośnika i czynszu."
+                  disabled={customCreateBusy}
+                />
+              </div>
+              <div className="flex justify-end gap-2 border-t pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCustomDialogOpen(false)}
+                  disabled={customCreateBusy}
+                >
+                  Anuluj
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void createCustomColumn()}
+                  disabled={customCreateBusy}
+                >
+                  {customCreateBusy ? "Tworzenie…" : "Utwórz kolumnę"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog
           open={deleteRow != null}
@@ -813,6 +1042,11 @@ function ContractsPage() {
                   <th className="px-4 py-3 w-48">Termin</th>
                   <th className="px-4 py-3 text-right">/mc</th>
                   <th className="px-4 py-3 text-right">Okres</th>
+                  {customColumns.map((column) => (
+                    <th key={column.id} className="px-4 py-3">
+                      {column.name}
+                    </th>
+                  ))}
                   <th className="px-4 py-3 text-right">Akcje</th>
                 </tr>
               </thead>
@@ -858,6 +1092,11 @@ function ContractsPage() {
                       <td className="px-4 py-3 text-right text-xs tabular-nums text-muted-foreground">
                         {formatPLN(b.periodEstimate)}
                       </td>
+                      {customColumns.map((column) => (
+                        <td key={column.id} className="px-4 py-3 text-xs">
+                          {renderCustomValue(b, column)}
+                        </td>
+                      ))}
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
                           <Button

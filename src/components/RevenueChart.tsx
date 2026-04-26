@@ -12,7 +12,7 @@ export function RevenueChart({ data }: { data?: RevenuePoint[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base font-semibold">Przychód miesięczny (PLN)</CardTitle>
+        <CardTitle className="text-base font-semibold">Wartość umów miesięcznie (PLN)</CardTitle>
         <p className="text-xs text-muted-foreground">
           {data
             ? "Projekcja 7 miesięcy na bazie dat wygaśnięć"
@@ -50,7 +50,7 @@ export function RevenueChart({ data }: { data?: RevenuePoint[] }) {
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              formatter={(v: number) => [`${v.toLocaleString("pl-PL")} PLN`, "Przychód"]}
+              formatter={(v: number) => [`${v.toLocaleString("pl-PL")} PLN`, "Wartość umów"]}
             />
             <Area
               type="monotone"

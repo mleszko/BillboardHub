@@ -293,9 +293,9 @@ function AppPage() {
     const expiring30 = dashboardRows.filter(
       (r) => !r.expiryUnknown && daysRemainingFromIso(r.expiryDate) <= 30,
     ).length;
-    const monthlyRevenue = dashboardRows.reduce((sum, r) => sum + (r.monthlyRentNet || 0), 0);
+    const monthlyValue = dashboardRows.reduce((sum, r) => sum + (r.monthlyRentNet || 0), 0);
     const occupancy = total > 0 ? 100 : 0;
-    return { total, expiring30, monthlyRevenue, occupancy };
+    return { total, expiring30, monthlyRevenue: monthlyValue, occupancy };
   }, [dashboardRows]);
 
   const projectedRevenue = useMemo<RevenuePoint[]>(() => {
@@ -324,7 +324,7 @@ function AppPage() {
       {
         id: 1,
         type: "payment",
-        text: `Aktualny przychód kontraktowy: ${formatPLN(summary.monthlyRevenue)}/mc`,
+        text: `Aktualna wartość umów: ${formatPLN(summary.monthlyRevenue)}/mc`,
         when: "na żywo",
         amount: summary.monthlyRevenue,
       },
