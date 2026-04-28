@@ -28,8 +28,8 @@ cd backend && .venv/bin/python -m pytest tests/ -q
 
 ## API surface
 
-- Routers mounted in `backend/app/main.py` (health, auth, **imports**, hubert, contracts).
-- Duplicate prefix `/api` mirrors `/` for some deployments (imports + contracts included).
+- Routers mounted in `backend/app/main.py` (health, auth, **imports**, hubert, contracts, custom-columns).
+- Duplicate prefix `/api` mirrors `/` for some deployments (imports + contracts included; custom-columns are under `/contracts/custom-columns`).
 
 ## Auth
 
@@ -38,3 +38,8 @@ cd backend && .venv/bin/python -m pytest tests/ -q
 ## Rules in repo
 
 - Project Cursor rules: `.cursor/rules/*.mdc` (Python, tests, LLM/privacy, agent comms).
+
+## Cloud agent environment
+
+- Repo includes `/.cursor/environment.json` and `/.cursor/scripts/start-agent.sh`.
+- Bootstrap script installs Node deps (`npm ci`) and backend Python deps (`backend/requirements.txt`), and ensures `backend/.venv/bin/python` wrapper works for hooks/tests.
