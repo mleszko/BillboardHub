@@ -188,6 +188,7 @@ This repo now includes GitHub Actions workflows:
   - deploys backend to Railway DEV on `main`
   - deploys backend to Railway PROD on `prod`
   - deploys frontend to configured static host **if** host secrets are present
+  - for urgent production hotfixes, a small commit on `prod` triggers direct PROD deploy
 
 ### Required GitHub Secrets
 
