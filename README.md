@@ -170,6 +170,15 @@ Copy from `backend/.env.example` and configure:
 5. Attach Supabase Postgres URL as `DATABASE_URL`.
 6. Set `ALLOWED_ORIGINS` to your Vercel frontend URL.
 
+### Branch mapping currently used (Railway Auto Deploy enabled)
+
+If you keep Railway Auto Deploy enabled (no manual toggling required):
+
+- DEV backend service should track branch `main`
+- PROD backend service should track branch `prod`
+
+In this mode, a push to `main` deploys DEV and a push to `prod` deploys PROD directly from Railway's Git integration.
+
 ## Frontend deployment
 
 Deploy the root Vite app to your preferred static host (Cloudflare Pages, Netlify, Vercel static).
@@ -189,6 +198,8 @@ This repo now includes GitHub Actions workflows:
   - deploys backend to Railway PROD on `prod`
   - deploys frontend to configured static host **if** host secrets are present
   - for urgent production hotfixes, a small commit on `prod` triggers direct PROD deploy
+
+> Note: if Railway Auto Deploy is enabled and Railway GitHub Action deploy secrets are also configured, you can get duplicate deployments (one from Railway Git integration and one from Actions).
 
 ### Required GitHub Secrets
 
