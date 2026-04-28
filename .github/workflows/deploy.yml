@@ -4,60 +4,107 @@ on:
   push:
     branches: [main, prod]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
 
 jobs:
   deploy-backend-railway-dev:
     name: Deploy backend to Railway (DEV)
     runs-on: ubuntu-latest
     environment: dev
-    if: ${{ github.ref_name == 'main' && secrets.RAILWAY_TOKEN != '' && secrets.RAILWAY_SERVICE_ID_DEV != '' }}
+    if: ${{ (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'dev') }}
     defaults:
       run:
         working-directory: backend
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_DEV }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Railway DEV credentials
+        id: creds
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ] || [ -z "${RAILWAY_SERVICE_ID}" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "Missing RAILWAY_TOKEN or RAILWAY_SERVICE_ID_DEV. Skipping deploy."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Railway CLI
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: npm install -g @railway/cli
 
       - name: Trigger Railway deploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_DEV }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: railway up --service "$RAILWAY_SERVICE_ID" --detach
 
   deploy-backend-railway-prod:
     name: Deploy backend to Railway (PROD)
     runs-on: ubuntu-latest
     environment: production
-    if: ${{ github.ref_name == 'prod' && secrets.RAILWAY_TOKEN != '' && (secrets.RAILWAY_SERVICE_ID_PROD != '' || secrets.RAILWAY_SERVICE_ID != '') }}
+    if: ${{ (github.event_name == 'push' && github.ref_name == 'prod') || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'prod') }}
     defaults:
       run:
         working-directory: backend
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_PROD != '' && secrets.RAILWAY_SERVICE_ID_PROD || secrets.RAILWAY_SERVICE_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Railway PROD credentials
+        id: creds
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ] || [ -z "${RAILWAY_SERVICE_ID}" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "Missing RAILWAY_TOKEN or RAILWAY_SERVICE_ID_PROD/RAILWAY_SERVICE_ID. Skipping deploy."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Railway CLI
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: npm install -g @railway/cli
 
       - name: Trigger Railway deploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_PROD != '' && secrets.RAILWAY_SERVICE_ID_PROD || secrets.RAILWAY_SERVICE_ID }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: railway up --service "$RAILWAY_SERVICE_ID" --detach
 
   deploy-frontend-vercel-dev:
     name: Deploy frontend to Vercel (DEV)
     runs-on: ubuntu-latest
     environment: dev
-    if: ${{ github.ref_name == 'main' && secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID_DEV != '' }}
+    if: ${{ (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'dev') }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Vercel DEV credentials
+        id: creds
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "Missing VERCEL_TOKEN, VERCEL_ORG_ID or VERCEL_PROJECT_ID_DEV. Skipping deploy."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -65,39 +112,46 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Vercel CLI
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: npm install -g vercel@latest
 
       - name: Pull Vercel environment
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build Vercel artifacts
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
   deploy-frontend-vercel-prod:
     name: Deploy frontend to Vercel (PROD)
     runs-on: ubuntu-latest
     environment: production
-    if: ${{ github.ref_name == 'prod' && secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && (secrets.VERCEL_PROJECT_ID_PROD != '' || secrets.VERCEL_PROJECT_ID != '') }}
+    if: ${{ (github.event_name == 'push' && github.ref_name == 'prod') || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'prod') }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD != '' && secrets.VERCEL_PROJECT_ID_PROD || secrets.VERCEL_PROJECT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Vercel PROD credentials
+        id: creds
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "Missing VERCEL_TOKEN, VERCEL_ORG_ID or VERCEL_PROJECT_ID_PROD/VERCEL_PROJECT_ID. Skipping deploy."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -105,25 +159,17 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Vercel CLI
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: npm install -g vercel@latest
 
       - name: Pull Vercel environment
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD != '' && secrets.VERCEL_PROJECT_ID_PROD || secrets.VERCEL_PROJECT_ID }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build Vercel artifacts
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD != '' && secrets.VERCEL_PROJECT_ID_PROD || secrets.VERCEL_PROJECT_ID }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD != '' && secrets.VERCEL_PROJECT_ID_PROD || secrets.VERCEL_PROJECT_ID }}
+        if: ${{ steps.creds.outputs.missing == 'false' }}
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
