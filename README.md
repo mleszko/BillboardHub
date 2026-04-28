@@ -184,8 +184,9 @@ This repo now includes GitHub Actions workflows:
   - backend: install deps, `python -m compileall app`, `pytest -q`
   - frontend: `npm ci`, `npm run lint`, `npm run build`
 - `/.github/workflows/deploy.yml`
-  - runs on push to `main` (and manual dispatch)
-  - deploys backend to Railway **if** Railway secrets are present
+  - runs on push to `main` and `prod` (and manual dispatch)
+  - deploys backend to Railway DEV on `main`
+  - deploys backend to Railway PROD on `prod`
   - deploys frontend to configured static host **if** host secrets are present
   - for urgent production hotfixes, a small commit on `prod` triggers direct PROD deploy
 
@@ -194,7 +195,8 @@ This repo now includes GitHub Actions workflows:
 For Railway auto-deploy:
 
 - `RAILWAY_TOKEN`
-- `RAILWAY_SERVICE_ID`
+- `RAILWAY_SERVICE_ID_DEV` (used for branch `main`)
+- `RAILWAY_SERVICE_ID_PROD` (used for branch `prod`)
 
 For frontend auto-deploy: set host-specific secrets used by your workflow.
 
@@ -214,7 +216,7 @@ Recommended rollout:
 2. Deploy backend on Railway once manually to verify env wiring.
 3. Deploy frontend static build once manually.
 4. Add the GitHub secrets above.
-5. Merge to `main` and let workflows handle auto-test + auto-deploy.
+5. Merge to `main` for DEV deploys and merge to `prod` for PROD deploys.
 
 Important: free tiers can throttle/sleep; acceptable for demo but not for strict uptime SLAs.
 
