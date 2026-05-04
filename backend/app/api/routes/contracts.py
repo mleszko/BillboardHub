@@ -75,7 +75,11 @@ def _supabase_storage_client():
     if not settings.supabase_url or not settings.supabase_service_role_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Supabase storage is not configured on backend.",
+            detail=(
+                "Supabase storage is not configured on backend. "
+                "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY "
+                "(or compatible aliases SUPABASE_SERVICE_KEY / SUPABASE_KEY)."
+            ),
         )
     return create_client(settings.supabase_url, settings.supabase_service_role_key).storage
 

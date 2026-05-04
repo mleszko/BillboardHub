@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
@@ -34,9 +34,15 @@ class Settings(BaseSettings):
 
     # Supabase Auth JWT secret (optional in local dev).
     supabase_jwt_secret: str = ""
-    supabase_url: str = ""
-    supabase_anon_key: str = ""
-    supabase_service_role_key: str = ""
+    supabase_url: str = Field(default="", validation_alias=AliasChoices("SUPABASE_URL", "VITE_SUPABASE_URL"))
+    supabase_anon_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON", "VITE_SUPABASE_ANON_KEY"),
+    )
+    supabase_service_role_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY"),
+    )
 
     # Import: when false, column mapping uses only local heuristics (no LLM / no row samples sent externally).
     import_use_llm: bool = Field(default=True, validation_alias="IMPORT_USE_LLM")
@@ -45,7 +51,10 @@ class Settings(BaseSettings):
         default=5.0, validation_alias="MAPS_LINK_RESOLVE_TIMEOUT_SECONDS"
     )
     contract_photo_max_bytes: int = Field(default=2_000_000, validation_alias="CONTRACT_PHOTO_MAX_BYTES")
-    contract_photo_bucket: str = Field(default="contract-photos", validation_alias="CONTRACT_PHOTO_BUCKET")
+    contract_photo_bucket: str = Field(
+        default="contract-photos",
+        validation_alias=AliasChoices("CONTRACT_PHOTO_BUCKET", "SUPABASE_STORAGE_BUCKET"),
+    )
     contract_photo_max_dimension_px: int = Field(
         default=1600, validation_alias="CONTRACT_PHOTO_MAX_DIMENSION_PX"
     )
