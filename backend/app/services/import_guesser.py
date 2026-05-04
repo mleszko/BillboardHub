@@ -45,10 +45,17 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "rozmiar": [("surface_size", 0.82)],
     "format": [("surface_size", 0.55)],
     "osoba_kontaktowa": [("contact_person", 0.92)],
+    "osoba_do_kontaktu": [("contact_person", 0.9)],
+    "kontaktowa": [("contact_person", 0.75)],
     "kontakt": [("contact_person", 0.65)],
     "telefon": [("contact_phone", 0.9)],
+    "telefon_osoby_kontaktowej": [("contact_phone", 0.95)],
+    "telefon_kontaktowy": [("contact_phone", 0.93)],
     "tel": [("contact_phone", 0.85)],
     "email": [("contact_email", 0.92)],
+    "email_osoby_kontaktowej": [("contact_email", 0.95)],
+    "e_mail_osoby_kontaktowej": [("contact_email", 0.95)],
+    "mail_osoby_kontaktowej": [("contact_email", 0.94)],
     "mail": [("contact_email", 0.88)],
     "wartosc_umowy": [("total_contract_value_net", 0.88)],
     "koszt_calkowity": [("total_contract_value_net", 0.86)],
@@ -65,6 +72,8 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "vat": [("vat_rate", 0.9)],
     "waluta": [("currency", 0.9)],
     "uwagi": [("notes", 0.82)],
+    "uwagi_do_platnosci": [("notes", 0.86)],
+    "uwagi_dot_platnosci": [("notes", 0.86)],
     "inwestycja": [("investment_name", 0.94)],
     "koordynaty_gps": [("gps_coordinates", 0.96)],
     "gps": [("gps_coordinates", 0.94)],
@@ -76,12 +85,21 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "okres_umowy": [("expiry_date", 0.88)],
     "czas_obowiazywania": [("expiry_date", 0.9)],
     "obowiazuje_do": [("expiry_date", 0.93)],
+    "koszt_netto_miesiac": [("monthly_rent_net", 0.92)],
+    "koszt_miesieczny_netto": [("monthly_rent_net", 0.93)],
+    "koszt_za_caly_okres_trwania_umowy": [("total_contract_value_net", 0.92)],
+    "koszt_za_caly_okres_umowy": [("total_contract_value_net", 0.9)],
 }
 
 CONTAINS_HEADER_HINTS: tuple[tuple[str, str, float], ...] = (
     ("wynajm", "property_owner_name", 0.9),
     ("wlascic", "property_owner_name", 0.88),
     ("najemc", "advertiser_name", 0.84),
+    ("kontaktow", "contact_person", 0.75),
+    ("telefon", "contact_phone", 0.84),
+    ("email", "contact_email", 0.84),
+    ("e_mail", "contact_email", 0.84),
+    ("mail", "contact_email", 0.82),
 )
 
 
