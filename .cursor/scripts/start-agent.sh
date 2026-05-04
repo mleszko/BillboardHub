@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "[cloud-agent-bootstrap] forcing system dependencies..."
+sudo apt-get update && sudo apt-get install -y python3.12-venv npm
+
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV_DIR="$ROOT_DIR/backend/.venv"
 VENV_PY="$VENV_DIR/bin/python"
