@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!authConfigured) {
         return {
           error: new Error(
-            "Logowanie przez Supabase nie jest skonfigurowane. Ustaw VITE_SUPABASE_URL i VITE_SUPABASE_ANON_KEY w pliku .env.",
+            "Logowanie przez Supabase nie jest skonfigurowane. Ustaw VITE_SUPABASE_URL i VITE_SUPABASE_ANON w pliku .env.",
           ),
         };
       }
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!authConfigured) {
         return {
           error: new Error(
-            "Rejestracja wymaga skonfigurowanego Supabase (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY).",
+            "Rejestracja wymaga skonfigurowanego Supabase (VITE_SUPABASE_URL, VITE_SUPABASE_ANON).",
           ),
         };
       }

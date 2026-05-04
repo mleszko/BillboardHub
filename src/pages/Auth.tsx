@@ -33,7 +33,7 @@ export function AuthPage() {
 
     if (!authConfigured) {
       setFormError(
-        "Brak konfiguracji Supabase po stronie frontu. Dodaj VITE_SUPABASE_URL i VITE_SUPABASE_ANON_KEY do pliku .env w katalogu głównym projektu (obok VITE_BACKEND_URL).",
+        "Brak konfiguracji Supabase po stronie frontu. Dodaj VITE_SUPABASE_URL i VITE_SUPABASE_ANON do pliku .env w katalogu głównym projektu (obok VITE_BACKEND_URL).",
       );
       setIsSubmitting(false);
       return;
