@@ -57,6 +57,8 @@ const TARGET_FIELDS = [
   "billboard_type",
   "surface_size",
   "location_address",
+  "investment_name",
+  "gps_coordinates",
   "city",
   "latitude",
   "longitude",

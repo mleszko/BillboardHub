@@ -24,15 +24,21 @@ def test_create_and_patch_contract() -> None:
             json={
                 "advertiser_name": "  Sklep  ",
                 "billboard_code": "SUW-99",
+                "investment_name": "  Modernizacja peronu  ",
                 "city": "Miasto testowe",
+                "gps_coordinates_raw": "https://maps.app.goo.gl/nDxi3L4cLSowfZK37",
                 "expiry_unknown": True,
                 "monthly_rent_net": "1200.50",
+                "notes": "  Uwagi testowe  ",
             },
         )
         assert create.status_code == 201, create.text
         body = create.json()
         assert body["advertiser_name"] == "Sklep"
         assert body["billboard_code"] == "SUW-99"
+        assert body["investment_name"] == "Modernizacja peronu"
+        assert body["gps_coordinates_raw"] == "https://maps.app.goo.gl/nDxi3L4cLSowfZK37"
+        assert body["notes"] == "Uwagi testowe"
         assert body["expiry_unknown"] is True
         assert body["expiry_date"] == PLACEHOLDER_CONTRACT_EXPIRY.isoformat()
         cid = body["id"]
@@ -42,6 +48,9 @@ def test_create_and_patch_contract() -> None:
             headers=_DEV_HEADERS,
             json={
                 "advertiser_name": "Inny klient",
+                "investment_name": "Nowa inwestycja",
+                "gps_coordinates_raw": "https://maps.app.goo.gl/nDxi3L4cLSowfZK37",
+                "notes": "Notatka po edycji",
                 "expiry_date": "2030-06-15",
                 "expiry_unknown": False,
             },
@@ -49,6 +58,9 @@ def test_create_and_patch_contract() -> None:
         assert patch.status_code == 200, patch.text
         updated = patch.json()
         assert updated["advertiser_name"] == "Inny klient"
+        assert updated["investment_name"] == "Nowa inwestycja"
+        assert updated["gps_coordinates_raw"] == "https://maps.app.goo.gl/nDxi3L4cLSowfZK37"
+        assert updated["notes"] == "Notatka po edycji"
         assert updated["expiry_date"] == "2030-06-15"
         assert updated["expiry_unknown"] is False
 

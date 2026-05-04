@@ -34,10 +34,21 @@ class Settings(BaseSettings):
 
     # Supabase Auth JWT secret (optional in local dev).
     supabase_jwt_secret: str = ""
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
 
     # Import: when false, column mapping uses only local heuristics (no LLM / no row samples sent externally).
     import_use_llm: bool = Field(default=True, validation_alias="IMPORT_USE_LLM")
     import_llm_row_repair: bool = Field(default=False, validation_alias="IMPORT_LLM_ROW_REPAIR")
+    maps_link_resolve_timeout_seconds: float = Field(
+        default=5.0, validation_alias="MAPS_LINK_RESOLVE_TIMEOUT_SECONDS"
+    )
+    contract_photo_max_bytes: int = Field(default=2_000_000, validation_alias="CONTRACT_PHOTO_MAX_BYTES")
+    contract_photo_bucket: str = Field(default="contract-photos", validation_alias="CONTRACT_PHOTO_BUCKET")
+    contract_photo_max_dimension_px: int = Field(
+        default=1600, validation_alias="CONTRACT_PHOTO_MAX_DIMENSION_PX"
+    )
 
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ENV_FILE),

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import urlopen
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +23,12 @@ from app.services.llm_gateway import chat_json_with_fallback
 
 MISSING_ADVERTISER_PLACEHOLDER = "DO_UZUPELNIENIA"
 LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})
+_MAPS_APP_HOSTS = {"maps.app.goo.gl", "www.maps.app.goo.gl"}
+_GOOGLE_COORD_PATTERNS = (
+    re.compile(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
+    re.compile(r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
+    re.compile(r"[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
+)
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
@@ -35,6 +44,7 @@ def normalize_value(target_field_name: str, value: Any) -> Any:
     text_fields = {
         "contract_number",
         "advertiser_name",
+        "investment_name",
         "property_owner_name",
         "billboard_code",
         "billboard_type",
@@ -46,6 +56,7 @@ def normalize_value(target_field_name: str, value: Any) -> Any:
         "contact_phone",
         "contact_email",
         "notes",
+        "gps_coordinates",
     }
 
     if target_field_name in date_fields:
@@ -70,6 +81,46 @@ def normalize_value(target_field_name: str, value: Any) -> Any:
         stripped = value.strip()
         return stripped or None
     return value
+
+
+def _is_valid_coord_pair(latitude: float, longitude: float) -> bool:
+    return -90.0 <= latitude <= 90.0 and -180.0 <= longitude <= 180.0
+
+
+def _extract_google_coords_from_url(url: str) -> tuple[float, float] | None:
+    for pattern in _GOOGLE_COORD_PATTERNS:
+        match = pattern.search(url)
+        if not match:
+            continue
+        latitude = float(match.group(1))
+        longitude = float(match.group(2))
+        if _is_valid_coord_pair(latitude, longitude):
+            return latitude, longitude
+    return None
+
+
+def _resolve_maps_app_shortlink(gps_link: str) -> tuple[float, float] | None:
+    settings = get_settings()
+    parsed = urlparse(gps_link.strip())
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    if parsed.netloc.lower() not in _MAPS_APP_HOSTS:
+        return None
+    try:
+        with urlopen(gps_link, timeout=settings.maps_link_resolve_timeout_seconds) as resp:  # noqa: S310
+            final_url = resp.geturl()
+    except Exception:  # noqa: BLE001
+        return None
+    return _extract_google_coords_from_url(final_url)
+
+
+def _resolve_gps_payload(gps_link: str | None) -> tuple[Decimal, Decimal] | None:
+    if not gps_link:
+        return None
+    resolved = _resolve_maps_app_shortlink(gps_link)
+    if resolved is None:
+        return None
+    return Decimal(str(resolved[0])), Decimal(str(resolved[1]))
 
 
 def _to_date(value: Any) -> date | None:
@@ -365,6 +416,20 @@ async def confirm_mapping_and_import(
         if not normalized_payload.get("expiry_date"):
             normalized_payload["expiry_date"] = PLACEHOLDER_CONTRACT_EXPIRY
 
+        gps_link = normalized_payload.get("gps_coordinates")
+        if gps_link:
+            resolved = _resolve_maps_app_shortlink(str(gps_link))
+            if resolved is None:
+                validation_errors.append(
+                    {
+                        "field": "gps_coordinates",
+                        "reason": "Koordynaty GPS muszą być linkiem maps.app.goo.gl z możliwymi do odczytu współrzędnymi.",
+                    }
+                )
+            else:
+                normalized_payload["latitude"] = Decimal(str(resolved[0]))
+                normalized_payload["longitude"] = Decimal(str(resolved[1]))
+
         if is_probable_summary_raw_row(raw_row):
             validation_errors.append(
                 {"field": "row", "reason": "Wiersz pominięty (RAZEM/SUMA lub pusty)."}
@@ -422,6 +487,7 @@ async def confirm_mapping_and_import(
             existing_contract.source_row_number = row_index
             existing_contract.contract_number = normalized_payload.get("contract_number")
             existing_contract.advertiser_name = normalized_payload.get("advertiser_name")
+            existing_contract.investment_name = normalized_payload.get("investment_name")
             existing_contract.property_owner_name = normalized_payload.get("property_owner_name")
             existing_contract.billboard_code = normalized_payload.get("billboard_code")
             existing_contract.billboard_type = _coerce_billboard_type(normalized_payload.get("billboard_type"))
@@ -441,6 +507,7 @@ async def confirm_mapping_and_import(
             existing_contract.contact_phone = normalized_payload.get("contact_phone")
             existing_contract.contact_email = normalized_payload.get("contact_email")
             existing_contract.notes = normalized_payload.get("notes")
+            existing_contract.gps_coordinates_raw = normalized_payload.get("gps_coordinates")
             contracts_to_update.append(existing_contract)
             refreshed_key = _dedupe_key(normalized_payload)
             if refreshed_key:
@@ -465,6 +532,7 @@ async def confirm_mapping_and_import(
                 source_row_number=row_index,
                 contract_number=normalized_payload.get("contract_number"),
                 advertiser_name=normalized_payload.get("advertiser_name"),
+                investment_name=normalized_payload.get("investment_name"),
                 property_owner_name=normalized_payload.get("property_owner_name"),
                 billboard_code=normalized_payload.get("billboard_code"),
                 billboard_type=_coerce_billboard_type(normalized_payload.get("billboard_type")),
@@ -484,6 +552,7 @@ async def confirm_mapping_and_import(
                 contact_phone=normalized_payload.get("contact_phone"),
                 contact_email=normalized_payload.get("contact_email"),
                 notes=normalized_payload.get("notes"),
+                gps_coordinates_raw=normalized_payload.get("gps_coordinates"),
             )
             contracts_to_create.append(contract)
             created_key = _dedupe_key(normalized_payload)

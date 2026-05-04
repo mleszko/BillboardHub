@@ -65,6 +65,10 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "vat": [("vat_rate", 0.9)],
     "waluta": [("currency", 0.9)],
     "uwagi": [("notes", 0.82)],
+    "inwestycja": [("investment_name", 0.94)],
+    "koordynaty_gps": [("gps_coordinates", 0.96)],
+    "gps": [("gps_coordinates", 0.94)],
+    "link_google_maps": [("gps_coordinates", 0.9)],
     "szerokosc_geo": [("latitude", 0.82)],
     "dlugosc_geo": [("longitude", 0.82)],
     # „Czas trwania umowy” — często zakres DD.MM.YYYY–DD.MM.YYYY lub „na X lat od …”
