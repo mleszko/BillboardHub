@@ -24,7 +24,9 @@ from app.services.llm_gateway import chat_json_with_fallback
 MISSING_ADVERTISER_PLACEHOLDER = "DO_UZUPELNIENIA"
 LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})
 _MAPS_APP_HOSTS = {"maps.app.goo.gl", "www.maps.app.goo.gl"}
+_CONTACT_PERSON_MAX_LEN = 255
 _CONTACT_PHONE_MAX_LEN = 64
+_CONTACT_EMAIL_MAX_LEN = 255
 _GOOGLE_COORD_PATTERNS = (
     re.compile(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
     re.compile(r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
@@ -513,12 +515,18 @@ async def confirm_mapping_and_import(
             existing_contract.total_contract_value_net = _to_decimal(normalized_payload.get("total_contract_value_net"))
             existing_contract.currency = normalized_payload.get("currency") or "PLN"
             existing_contract.vat_rate = _to_decimal(normalized_payload.get("vat_rate"))
-            existing_contract.contact_person = normalized_payload.get("contact_person")
+            existing_contract.contact_person = _to_limited_text(
+                normalized_payload.get("contact_person"),
+                _CONTACT_PERSON_MAX_LEN,
+            )
             existing_contract.contact_phone = _to_limited_text(
                 normalized_payload.get("contact_phone"),
                 _CONTACT_PHONE_MAX_LEN,
             )
-            existing_contract.contact_email = normalized_payload.get("contact_email")
+            existing_contract.contact_email = _to_limited_text(
+                normalized_payload.get("contact_email"),
+                _CONTACT_EMAIL_MAX_LEN,
+            )
             existing_contract.notes = normalized_payload.get("notes")
             existing_contract.gps_coordinates_raw = normalized_payload.get("gps_coordinates")
             contracts_to_update.append(existing_contract)
@@ -561,12 +569,18 @@ async def confirm_mapping_and_import(
                 total_contract_value_net=_to_decimal(normalized_payload.get("total_contract_value_net")),
                 currency=normalized_payload.get("currency") or "PLN",
                 vat_rate=_to_decimal(normalized_payload.get("vat_rate")),
-                contact_person=normalized_payload.get("contact_person"),
+                contact_person=_to_limited_text(
+                    normalized_payload.get("contact_person"),
+                    _CONTACT_PERSON_MAX_LEN,
+                ),
                 contact_phone=_to_limited_text(
                     normalized_payload.get("contact_phone"),
                     _CONTACT_PHONE_MAX_LEN,
                 ),
-                contact_email=normalized_payload.get("contact_email"),
+                contact_email=_to_limited_text(
+                    normalized_payload.get("contact_email"),
+                    _CONTACT_EMAIL_MAX_LEN,
+                ),
                 notes=normalized_payload.get("notes"),
                 gps_coordinates_raw=normalized_payload.get("gps_coordinates"),
             )

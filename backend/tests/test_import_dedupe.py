@@ -429,6 +429,75 @@ def test_import_truncates_overlong_contact_phone() -> None:
         assert item["contact_phone"] == long_phone_value[:64]
 
 
+def test_import_truncates_overlong_contact_person_and_email() -> None:
+    long_person_value = (
+        "Mariusz Mierzejewski, wykonawca: Sławomir Wyszomirski tel 880379785 "
+        "slawek@projektstudio.elk.pl oraz dodatkowe informacje operacyjne"
+    )
+    long_email_value = (
+        "bardzo.dlugi.alias.kontaktowy.z.bardzo.dlugim.opisem@"
+        "przykladowa-bardzo-dluga-domena-kontrahenta-z-opisem.pl"
+    )
+    csv_with_long_contact_data = (
+        "Najemca,Miasto,Adres,Data_wygasniecia,Osoba kontaktowa,E-mail osoby kontaktowej\n"
+        f"Klient Kontakt,Suwałki,Utrata 3,2026-12-31,\"{long_person_value}\",\"{long_email_value}\"\n"
+    ).encode("utf-8")
+    with TestClient(app) as client:
+        client.get("/health")
+        guess = client.post(
+            "/imports/guess-mapping",
+            headers=_DEV_HEADERS,
+            files={"file": ("contact_long.csv", csv_with_long_contact_data, "text/csv")},
+            data={
+                "sheet_name": "",
+                "header_row_1based": "0",
+                "skip_rows_before_header": "0",
+                "unpivot_month_columns": "false",
+                "monthly_aggregate": "mean",
+            },
+        )
+        assert guess.status_code == 200, guess.text
+        proposal = guess.json()
+        payload = {
+            "session_id": proposal["session_id"],
+            "owner_user_id": proposal["owner_user_id"],
+            "mapping": [
+                {
+                    "source_column_name": m["source_column_name"],
+                    "target_field_name": (
+                        "contact_person"
+                        if m["source_column_name"] == "Osoba kontaktowa"
+                        else (
+                            "contact_email"
+                            if m["source_column_name"] == "E-mail osoby kontaktowej"
+                            else m["target_field_name"]
+                        )
+                    ),
+                    "confirmed_by_user": True,
+                    "user_override": m["source_column_name"] in {"Osoba kontaktowa", "E-mail osoby kontaktowej"},
+                    "transform_hint": m.get("transform_hint"),
+                }
+                for m in proposal["mapping_suggestions"]
+            ],
+        }
+        confirm = client.post("/imports/confirm-mapping", headers=_DEV_HEADERS, json=payload)
+        assert confirm.status_code == 200, confirm.text
+        result = confirm.json()
+        assert result["status"] == "completed"
+        assert result["imported_rows"] >= 1
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        item = next((row for row in listed.json()["items"] if row["advertiser_name"] == "Klient Kontakt"), None)
+        assert item is not None
+        assert item["contact_person"] is not None
+        assert item["contact_email"] is not None
+        assert len(item["contact_person"]) <= 255
+        assert len(item["contact_email"]) <= 255
+        assert item["contact_person"] == long_person_value[:255]
+        assert item["contact_email"] == long_email_value[:255]
+
+
 def test_to_json_safe_replaces_nan_and_inf_with_null() -> None:
     payload = {
         "plain_nan": float("nan"),
