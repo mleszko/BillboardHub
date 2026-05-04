@@ -11,12 +11,17 @@ _DEV_HEADERS = {
     "x-dev-user-id": "import-dedupe-user",
     "x-dev-user-email": "import-dedupe@billboardhub.test",
 }
+_DEV_HEADERS_NEW_USER = {
+    "x-dev-user-id": "import-dedupe-user-2",
+    "x-dev-user-email": "import-dedupe-user-2@billboardhub.test",
+}
 
 
-def _run_import(client: TestClient, raw_csv: bytes) -> dict:
+def _run_import(client: TestClient, raw_csv: bytes, headers: dict[str, str] | None = None) -> dict:
+    request_headers = headers or _DEV_HEADERS
     guess = client.post(
         "/imports/guess-mapping",
-        headers=_DEV_HEADERS,
+        headers=request_headers,
         files={"file": ("sample_import.csv", raw_csv, "text/csv")},
         data={
             "sheet_name": "",
@@ -42,7 +47,7 @@ def _run_import(client: TestClient, raw_csv: bytes) -> dict:
             for m in proposal["mapping_suggestions"]
         ],
     }
-    confirm = client.post("/imports/confirm-mapping", headers=_DEV_HEADERS, json=payload)
+    confirm = client.post("/imports/confirm-mapping", headers=request_headers, json=payload)
     assert confirm.status_code == 200, confirm.text
     return confirm.json()
 
@@ -95,6 +100,39 @@ def test_reimport_does_not_duplicate_contracts() -> None:
         assert list_after_second.status_code == 200, list_after_second.text
         second_count = len(list_after_second.json()["items"])
         assert second_count == first_count
+
+
+def test_same_file_import_for_new_user_is_isolated_and_deduplicated() -> None:
+    sample = Path(__file__).with_name("sample_import.csv").read_bytes()
+    with TestClient(app) as client:
+        client.get("/health")
+
+        first_user_import = _run_import(client, sample, headers=_DEV_HEADERS)
+        assert first_user_import["status"] == "completed"
+
+        first_user_list = client.get("/contracts", headers=_DEV_HEADERS)
+        assert first_user_list.status_code == 200, first_user_list.text
+        first_user_count = len(first_user_list.json()["items"])
+        assert first_user_count >= 1
+
+        new_user_import = _run_import(client, sample, headers=_DEV_HEADERS_NEW_USER)
+        assert new_user_import["status"] == "completed"
+
+        new_user_list = client.get("/contracts", headers=_DEV_HEADERS_NEW_USER)
+        assert new_user_list.status_code == 200, new_user_list.text
+        new_user_count = len(new_user_list.json()["items"])
+        assert new_user_count >= 1
+
+        first_user_after_new_user = client.get("/contracts", headers=_DEV_HEADERS)
+        assert first_user_after_new_user.status_code == 200, first_user_after_new_user.text
+        assert len(first_user_after_new_user.json()["items"]) == first_user_count
+
+        new_user_reimport = _run_import(client, sample, headers=_DEV_HEADERS_NEW_USER)
+        assert new_user_reimport["status"] == "completed"
+
+        new_user_after_reimport = client.get("/contracts", headers=_DEV_HEADERS_NEW_USER)
+        assert new_user_after_reimport.status_code == 200, new_user_after_reimport.text
+        assert len(new_user_after_reimport.json()["items"]) == new_user_count
 
 
 def test_reimport_without_contract_number_or_billboard_code_uses_composite_fallback() -> None:

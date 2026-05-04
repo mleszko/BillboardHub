@@ -11,6 +11,7 @@ import { isDemoMode } from "@/lib/demo";
 import { stats } from "@/lib/mock-data";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
+import { useProtectedApiReady } from "@/hooks/use-protected-api-ready";
 
 interface AppShellProps {
   children: ReactNode;
@@ -36,12 +37,17 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
   const location = useLocation();
   const [notifications, setNotifications] = useState(0);
   const [globalSearch, setGlobalSearch] = useState("");
+  const apiReady = useProtectedApiReady();
 
   useEffect(() => {
     let alive = true;
     const loadNotifications = async () => {
       if (isDemoMode()) {
         if (alive) setNotifications(stats().expiring30);
+        return;
+      }
+      if (!apiReady) {
+        if (alive) setNotifications(0);
         return;
       }
       try {
@@ -67,7 +73,7 @@ export function AppShell({ children, title, subtitle, actions }: AppShellProps) 
     return () => {
       alive = false;
     };
-  }, []);
+  }, [apiReady]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

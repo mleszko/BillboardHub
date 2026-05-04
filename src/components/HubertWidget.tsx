@@ -11,6 +11,7 @@ import { getBackendAuthHeaders } from "@/lib/backend-auth";
 import { useBackendProfile } from "@/hooks/use-backend-profile";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveUserFirstName } from "@/lib/user-name";
+import { useProtectedApiReady } from "@/hooks/use-protected-api-ready";
 
 interface Msg {
   id: number;
@@ -137,11 +138,12 @@ export function HubertWidget() {
   const demo = isDemoMode();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useBackendProfile();
+  const apiReady = useProtectedApiReady();
 
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!mounted || demo) return;
+    if (!mounted || demo || !apiReady) return;
     let alive = true;
     const loadContracts = async () => {
       try {
@@ -186,7 +188,7 @@ export function HubertWidget() {
     return () => {
       alive = false;
     };
-  }, [demo, mounted]);
+  }, [apiReady, demo, mounted]);
 
   const firstName = resolveUserFirstName({
     demo,

@@ -8,6 +8,7 @@ from urllib.request import urlopen
 
 from fastapi import Depends, Header, HTTPException, status
 from jose import JWTError, jwt
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -177,8 +178,17 @@ async def ensure_profile(
     existing = await db.get(Profile, user.user_id)
     if existing is None:
         db.add(Profile(user_id=user.user_id, email=email))
-        await db.commit()
-    elif user.email and existing.email != user.email:
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Concurrent first requests for the same user can race here.
+            # If another request already inserted the profile, continue safely.
+            await db.rollback()
+            existing = await db.get(Profile, user.user_id)
+            if existing is None:
+                raise
+
+    if existing is not None and user.email and existing.email != user.email:
         existing.email = user.email
         await db.commit()
     return user

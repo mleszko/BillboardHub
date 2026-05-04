@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "[cloud-agent-bootstrap] forcing system dependencies..."
+# Get rid of the old version first
+sudo apt-get remove -y nodejs npm
+
+# Install Node.js 22 from NodeSource
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs python3.12-venv
+
+
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV_DIR="$ROOT_DIR/backend/.venv"
 VENV_PY="$VENV_DIR/bin/python"
