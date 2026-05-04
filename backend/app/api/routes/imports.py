@@ -182,7 +182,9 @@ def _guess_mapping_with_gpt(source_columns: list[str], sample_rows: list[dict[st
         proposals = heuristic_mapping_proposals(source_columns)
         return _sanitize_lp_contract_number_mapping(proposals), "local-heuristics", "IMPORT_USE_LLM=false — użyto wyłącznie lokalnych heurystyk (bez wysyłki próbek do modelu)."
 
-    fallback = _fallback_proposals(source_columns)
+    # If provider keys are missing or LLM call fails, keep deterministic local mapping
+    # instead of returning all columns as unmapped.
+    fallback = heuristic_mapping_proposals(source_columns)
     contract_fields = _contract_model_fields()
     system_prompt = _build_system_prompt(source_columns, contract_fields)
     user_prompt = _build_user_prompt(sample_rows)
