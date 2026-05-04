@@ -47,6 +47,7 @@ type BackendContract = {
   expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
+  photo_url?: string | null;
 };
 
 type ContractsResponse = {
@@ -206,7 +207,7 @@ function MapPage() {
           contractStart: item.start_date || undefined,
           contractEnd: item.expiry_unknown ? undefined : item.expiry_date,
           expiryUnknown: Boolean(item.expiry_unknown),
-          creativePhoto: mapPhotos[idx % mapPhotos.length],
+          creativePhoto: item.photo_url || mapPhotos[idx % mapPhotos.length],
           dailyImpressions: estimateImpressions(type),
         };
       })

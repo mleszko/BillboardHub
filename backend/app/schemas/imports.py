@@ -9,6 +9,8 @@ CANONICAL_FIELDS = [
     "billboard_type",
     "surface_size",
     "location_address",
+    "investment_name",
+    "gps_coordinates",
     "city",
     "latitude",
     "longitude",
@@ -151,6 +153,8 @@ class ContractsListItem(BaseModel):
     property_owner_name: str | None = None
     city: str | None
     location_address: str | None = None
+    investment_name: str | None = None
+    gps_coordinates_raw: str | None = None
     latitude: float | None = None
     longitude: float | None = None
     surface_size: str | None = None
@@ -164,6 +168,7 @@ class ContractsListItem(BaseModel):
     contact_phone: str | None = None
     contact_email: str | None = None
     notes: str | None = None
+    photo_url: str | None = None
 
 
 class ContractCustomColumnItem(BaseModel):

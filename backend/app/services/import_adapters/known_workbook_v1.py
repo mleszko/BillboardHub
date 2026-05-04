@@ -37,6 +37,8 @@ _TARGET_BY_TOKEN: dict[str, str | None] = {
     "miasto": "city",
     "lokalizacja": "location_address",
     "uwagi": "notes",
+    "inwestycja": "investment_name",
+    "koordynaty_gps": "gps_coordinates",
     "powierzchnia": "surface_size",
     "wynajmujacy": "property_owner_name",
     "osoba_kontaktowa": "contact_person",

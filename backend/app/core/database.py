@@ -16,6 +16,11 @@ _CONTRACT_ALTER_COLUMNS: tuple[tuple[str, str], ...] = (
     ("contact_phone", "VARCHAR(64)"),
     ("contact_email", "VARCHAR(255)"),
     ("total_contract_value_net", "NUMERIC(14, 2)"),
+    ("investment_name", "VARCHAR(255)"),
+    ("gps_coordinates_raw", "VARCHAR(255)"),
+    ("photo_path", "TEXT"),
+    ("photo_url", "TEXT"),
+    ("photo_updated_at", "TIMESTAMP WITH TIME ZONE"),
 )
 
 

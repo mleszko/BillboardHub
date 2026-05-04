@@ -68,9 +68,13 @@ type BackendContract = {
   billboard_code: string | null;
   billboard_type?: string | null;
   advertiser_name: string;
+  investment_name?: string | null;
   property_owner_name?: string | null;
   city: string | null;
   location_address: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gps_coordinates_raw?: string | null;
   surface_size?: string | null;
   start_date: string | null;
   expiry_date: string;
@@ -82,6 +86,7 @@ type BackendContract = {
   contact_phone?: string | null;
   contact_email?: string | null;
   notes?: string | null;
+  photo_url?: string | null;
   custom_values?: Record<string, ContractCustomValue>;
 };
 
@@ -110,8 +115,12 @@ type ContractRow = {
   id: string;
   code: string;
   client: string;
+  investmentName: string | null;
   city: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
+  gpsCoordinatesRaw: string | null;
   size: string;
   monthlyPrice: number;
   status: "active" | "expiring_soon" | "critical" | "vacant";
@@ -123,6 +132,7 @@ type ContractRow = {
   contactPhone: string | null;
   contactEmail: string | null;
   notes: string | null;
+  photoUrl: string | null;
   totalContractValue: number | null;
   periodEstimate: number;
   customValues: Record<string, ContractCustomValue>;
@@ -161,8 +171,10 @@ function rowMatchesQuery(row: ContractRow, ql: string): boolean {
   const hay = [
     row.code,
     row.client,
+    row.investmentName,
     row.city,
     row.address,
+    row.gpsCoordinatesRaw,
     row.size,
     row.lessor,
     row.contactPerson,
@@ -208,6 +220,26 @@ function ContractDetailDialog({
             <dt className="text-muted-foreground">Lokalizacja</dt>
             <dd>
               {row.city} · {row.address}
+            </dd>
+            <dt className="text-muted-foreground">Inwestycja</dt>
+            <dd>{row.investmentName || "—"}</dd>
+            <dt className="text-muted-foreground">GPS</dt>
+            <dd className="space-y-0.5">
+              <div>
+                {row.latitude != null && row.longitude != null
+                  ? `${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}`
+                  : "—"}
+              </div>
+              {row.gpsCoordinatesRaw ? (
+                <a
+                  href={row.gpsCoordinatesRaw}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary underline underline-offset-2"
+                >
+                  Otwórz link maps.app.goo.gl
+                </a>
+              ) : null}
             </dd>
             <dt className="text-muted-foreground">Powierzchnia</dt>
             <dd>{row.size}</dd>
@@ -260,6 +292,18 @@ function ContractDetailDialog({
             <dt className="text-muted-foreground">Uwagi</dt>
             <dd className="whitespace-pre-wrap text-muted-foreground">{row.notes || "—"}</dd>
           </dl>
+          {row.photoUrl ? (
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Zdjęcie nośnika
+              </div>
+              <img
+                src={row.photoUrl}
+                alt={`Zdjęcie billboardu ${row.code}`}
+                className="max-h-56 rounded-md border object-cover"
+              />
+            </div>
+          ) : null}
 
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -386,8 +430,12 @@ function ContractsPage() {
         code:
           item.contract_number || item.billboard_code || `CTR-${item.id.slice(0, 8).toUpperCase()}`,
         client: item.advertiser_name,
+        investmentName: item.investment_name?.trim() || null,
         city: item.city || "—",
         address: item.location_address || "—",
+        latitude: typeof item.latitude === "number" ? item.latitude : null,
+        longitude: typeof item.longitude === "number" ? item.longitude : null,
+        gpsCoordinatesRaw: item.gps_coordinates_raw?.trim() || null,
         size: item.surface_size?.trim() || "—",
         monthlyPrice: monthly(item),
         status: statusFromBackend(item.contract_status, item.expiry_date, item.expiry_unknown),
@@ -399,6 +447,7 @@ function ContractsPage() {
         contactPhone: item.contact_phone?.trim() || null,
         contactEmail: item.contact_email?.trim() || null,
         notes: item.notes?.trim() || null,
+        photoUrl: item.photo_url?.trim() || null,
         totalContractValue: item.total_contract_value_net ?? null,
         customValues: item.custom_values ?? {},
         periodEstimate: estimatedPeriodValue(
@@ -522,8 +571,12 @@ function ContractsPage() {
                 id: b.id,
                 code: b.code,
                 client: b.client || "—",
+                investmentName: null,
                 city: b.city,
                 address: b.address,
+                latitude: b.lat,
+                longitude: b.lng,
+                gpsCoordinatesRaw: null,
                 size: b.size,
                 monthlyPrice: b.monthlyPrice,
                 status: b.status,
@@ -535,6 +588,7 @@ function ContractsPage() {
                 contactPhone: null,
                 contactEmail: null,
                 notes: null,
+                photoUrl: b.creativePhoto || null,
                 totalContractValue: null,
                 customValues: {},
                 periodEstimate: estimatedPeriodValue(

@@ -87,6 +87,7 @@ class Contract(Base):
     source_row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     contract_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     advertiser_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    investment_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     property_owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     billboard_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     billboard_type: Mapped[BillboardType] = mapped_column(SQLEnum(BillboardType), default=BillboardType.other, nullable=False)
@@ -94,6 +95,7 @@ class Contract(Base):
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    gps_coordinates_raw: Mapped[str | None] = mapped_column(String(255), nullable=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     expiry_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     monthly_rent_net: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
@@ -107,6 +109,9 @@ class Contract(Base):
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contract_status: Mapped[ContractStatus] = mapped_column(SQLEnum(ContractStatus), default=ContractStatus.draft, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
