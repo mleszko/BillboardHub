@@ -89,7 +89,7 @@ function isLpLikeHeader(header: string): boolean {
   return normalized === "l p" || compact === "lp";
 }
 
-function hasMissingRequiredTargets(rows: MappingRow[]): boolean {
+function hasMissingPartyTargets(rows: MappingRow[]): boolean {
   const selected = new Set(rows.map((item) => item.target_field_name).filter(Boolean));
   const hasParty = selected.has("advertiser_name") || selected.has("property_owner_name");
   return !hasParty;
@@ -215,10 +215,10 @@ function ImportPage() {
     })();
   }, []);
 
-  const requiredTargetsMissing = useMemo(() => {
-    if (!isBatchMode) return hasMissingRequiredTargets(mapping);
+  const missingPartyTargets = useMemo(() => {
+    if (!isBatchMode) return hasMissingPartyTargets(mapping);
     return batchProposals.some((sheet) =>
-      hasMissingRequiredTargets(mappingsBySheet[sheet.sheet_name] ?? []),
+      hasMissingPartyTargets(mappingsBySheet[sheet.sheet_name] ?? []),
     );
   }, [isBatchMode, mapping, batchProposals, mappingsBySheet]);
 
@@ -903,17 +903,17 @@ function ImportPage() {
                 </Button>
                 <Button
                   className="gap-2"
-                  disabled={requiredTargetsMissing || hasBlockedLpContractMapping || isBusy}
+                  disabled={hasBlockedLpContractMapping || isBusy}
                   onClick={() => setStage("preview")}
                 >
                   Podgląd importu <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
-              {requiredTargetsMissing && (
-                <p className="text-xs text-destructive">
-                  Wymagane mapowanie: <code>advertiser_name</code> lub{" "}
-                  <code>property_owner_name</code> (np. kolumna „wynajmujący”). Data wygaśnięcia —
-                  domyślnie koniec roku z nazwy pliku, jeśli brak kolumny z datą.
+              {missingPartyTargets && (
+                <p className="text-xs text-warning-foreground">
+                  Brak mapowania <code>advertiser_name</code> / <code>property_owner_name</code>.
+                  Import może być kontynuowany, ale brakująca nazwa zostanie automatycznie
+                  uzupełniona placeholderem.
                 </p>
               )}
               {hasBlockedLpContractMapping && (
@@ -985,7 +985,7 @@ function ImportPage() {
                 </Button>
                 <Button
                   className="gap-2"
-                  disabled={isBusy || requiredTargetsMissing || hasBlockedLpContractMapping}
+                  disabled={isBusy || hasBlockedLpContractMapping}
                   onClick={() => void confirmImport()}
                 >
                   <CheckCircle2 className="h-4 w-4" />
