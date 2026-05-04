@@ -38,6 +38,7 @@ import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
 import { useBackendProfile } from "@/hooks/use-backend-profile";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProtectedApiReady } from "@/hooks/use-protected-api-ready";
 import {
   billingMonthsCount,
   buildPaymentSchedule,
@@ -345,6 +346,7 @@ function ContractsPage() {
   const { data: demoBillboardRows } = useBillboards();
   const { user } = useAuth();
   const { profile } = useBackendProfile();
+  const protectedApiReady = useProtectedApiReady();
 
   useEffect(() => {
     setDemo(isDemoMode());
@@ -363,7 +365,7 @@ function ContractsPage() {
   }, []);
 
   const reloadBackendRows = useCallback(async () => {
-    if (demo) return;
+    if (demo || !protectedApiReady) return;
     try {
       setLoadError(null);
       const response = await fetch(`${API_BASE_URL}/contracts`, {
@@ -416,15 +418,19 @@ function ContractsPage() {
     } finally {
       setReady(true);
     }
-  }, [demo]);
+  }, [demo, protectedApiReady]);
 
   useEffect(() => {
     if (demo) {
       setReady(true);
       return;
     }
+    if (!protectedApiReady) {
+      setReady(false);
+      return;
+    }
     void reloadBackendRows();
-  }, [demo, reloadBackendRows]);
+  }, [demo, protectedApiReady, reloadBackendRows]);
 
   const confirmDeleteContract = useCallback(async () => {
     if (!deleteRow || demo) return;

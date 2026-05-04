@@ -9,6 +9,7 @@ import { DemoPreviewBadge } from "@/components/DemoPreviewBadge";
 import { isDemoMode } from "@/lib/demo";
 import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
+import { useProtectedApiReady } from "@/hooks/use-protected-api-ready";
 
 export const Route = createFileRoute("/map")({
   beforeLoad: () => requireSessionForAppRoute(),
@@ -134,6 +135,7 @@ function MapPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Billboard | null>(null);
   const [open, setOpen] = useState(false);
+  const apiReady = useProtectedApiReady();
 
   useEffect(() => {
     setDemo(isDemoMode());
@@ -142,6 +144,10 @@ function MapPage() {
   useEffect(() => {
     if (demo) {
       setReady(true);
+      return;
+    }
+    if (!apiReady) {
+      setReady(false);
       return;
     }
     let alive = true;
@@ -170,7 +176,7 @@ function MapPage() {
     return () => {
       alive = false;
     };
-  }, [demo]);
+  }, [apiReady, demo]);
 
   const mapRows = useMemo<Billboard[]>(() => {
     if (demo) return billboards;

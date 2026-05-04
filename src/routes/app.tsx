@@ -41,6 +41,7 @@ import { isDemoMode } from "@/lib/demo";
 import { getBillboards, useBillboards } from "@/lib/data-store";
 import { requireSessionForAppRoute } from "@/lib/require-session";
 import { getBackendAuthHeaders } from "@/lib/backend-auth";
+import { useProtectedApiReady } from "@/hooks/use-protected-api-ready";
 
 const TEMPLATE_HREF =
   "data:text/csv;charset=utf-8,Kod,Miasto,Adres,Klient,Cena_mies_PLN,Data_poczatku,Data_wygasniecia,Typ,Rozmiar%0ABIA-001,Bia%C5%82ystok,al.%20Jana%20Paw%C5%82a%20II%2057,Biedronka,8400,2024-09-01,2026-09-01,LED,12x4%20m";
@@ -146,6 +147,7 @@ function AppPage() {
   const [contractDialogInitial, setContractDialogInitial] = useState<ContractFormValues | null>(
     null,
   );
+  const canCallProtectedApi = useProtectedApiReady();
 
   const loadContractsFromApi = async () => {
     try {
@@ -186,6 +188,10 @@ function AppPage() {
       setBackendReady(true);
       return;
     }
+    if (!canCallProtectedApi) {
+      setBackendReady(false);
+      return;
+    }
     let alive = true;
     void (async () => {
       await loadContractsFromApi();
@@ -194,7 +200,7 @@ function AppPage() {
     return () => {
       alive = false;
     };
-  }, [demo]);
+  }, [canCallProtectedApi, demo]);
 
   const openNewContract = () => {
     setContractDialogMode("create");
