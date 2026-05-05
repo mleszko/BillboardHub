@@ -17,12 +17,18 @@ _DEV_HEADERS_NEW_USER = {
 }
 
 
-def _run_import(client: TestClient, raw_csv: bytes, headers: dict[str, str] | None = None) -> dict:
+def _run_import(
+    client: TestClient,
+    raw_csv: bytes,
+    headers: dict[str, str] | None = None,
+    *,
+    filename: str = "sample_import.csv",
+) -> dict:
     request_headers = headers or _DEV_HEADERS
     guess = client.post(
         "/imports/guess-mapping",
         headers=request_headers,
-        files={"file": ("sample_import.csv", raw_csv, "text/csv")},
+        files={"file": (filename, raw_csv, "text/csv")},
         data={
             "sheet_name": "",
             "header_row_1based": "0",

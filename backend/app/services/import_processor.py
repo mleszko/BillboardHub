@@ -6,7 +6,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from sqlalchemy import delete, select
@@ -271,17 +271,17 @@ def _dedupe_key(normalized_payload: dict[str, Any]) -> tuple[str, str] | None:
     billboard_code = _norm_key(normalized_payload.get("billboard_code"))
     if billboard_code:
         return ("billboard_code", billboard_code)
+    asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
+    city = _normalize_text_for_key(normalized_payload.get("city"))
+    address = _normalize_address_for_key(normalized_payload.get("location_address"))
+    if asset_name and city and address:
+        return ("asset_location_v1", f"{asset_name}|{city}|{address}")
     advertiser = _norm_key(normalized_payload.get("advertiser_name"))
     city = _norm_key(normalized_payload.get("city"))
     address = _norm_key(normalized_payload.get("location_address"))
     expiry = _norm_key(normalized_payload.get("expiry_date"))
     if advertiser and city and address and expiry:
         return ("composite_v1", f"{advertiser}|{city}|{address}|{expiry}")
-    if city and address and expiry:
-        return ("location_expiry_v1", f"{city}|{address}|{expiry}")
-    asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
-    if asset_name and city and address:
-        return ("asset_location_v1", f"{asset_name}|{city}|{address}")
     return None
 
 
@@ -299,12 +299,6 @@ def _all_match_keys(normalized_payload: dict[str, Any]) -> list[tuple[str, str]]
     asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
     city = _normalize_text_for_key(normalized_payload.get("city"))
     address = _normalize_address_for_key(normalized_payload.get("location_address"))
-    if city and address:
-        expiry = _normalize_text_for_key(normalized_payload.get("expiry_date"))
-        if expiry:
-            location_expiry = ("location_expiry_v1", f"{city}|{address}|{expiry}")
-            if location_expiry not in keys:
-                keys.append(location_expiry)
     if asset_name and city and address:
         asset_location = ("asset_location_v1", f"{asset_name}|{city}|{address}")
         if asset_location not in keys:
@@ -328,11 +322,11 @@ def _contract_match_keys(contract: Contract) -> list[tuple[str, str]]:
         "advertiser_name": contract.advertiser_name,
         "expiry_date": contract.expiry_date.isoformat() if contract.expiry_date else None,
     }
-    return _all_match_keys(payload)
-
-
-def _encode_match_key(key: tuple[str, str]) -> str:
-    return f"{key[0]}:{quote(key[1], safe='')}"
+    keys = _all_match_keys(payload)
+    source_file_name = (contract.source_file_name or "").strip()
+    if source_file_name and contract.source_row_number is not None:
+        keys.insert(0, ("source_file_row", f"{source_file_name}|{contract.source_row_number}"))
+    return keys
 
 
 def _register_contract_match_keys(
@@ -495,7 +489,7 @@ async def confirm_mapping_and_import(
     used_existing_contract_ids: set[str] = set()
     for contract in existing_contracts:
         _register_contract_match_keys(existing_by_key, contract)
-    contract_ids_to_keep = preserve_contract_ids if preserve_contract_ids is not None else set()
+    contract_ids_to_keep = set(preserve_contract_ids or set())
 
     for row_index, raw_row in enumerate(source_rows, start=1):
         if not isinstance(raw_row, dict):
