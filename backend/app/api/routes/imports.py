@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import logging
 from typing import Any
 
 import pandas as pd
@@ -36,8 +35,10 @@ from app.services.import_processor import confirm_mapping_and_import
 from app.services.import_templates import IMPORT_TEMPLATE_PRESETS
 from app.services.llm_gateway import chat_json_with_fallback
 
+import logging
+
 router = APIRouter(prefix="/imports", tags=["imports"])
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 PROMPT_VERSION = "v1"
 LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})

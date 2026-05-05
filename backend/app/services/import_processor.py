@@ -34,7 +34,7 @@ _GOOGLE_COORD_PATTERNS = (
     re.compile(r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
     re.compile(r"[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
