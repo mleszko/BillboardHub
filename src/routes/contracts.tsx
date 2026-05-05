@@ -66,6 +66,7 @@ type BackendContract = {
   id: string;
   contract_number: string | null;
   billboard_code: string | null;
+  asset_name?: string | null;
   billboard_type?: string | null;
   advertiser_name: string;
   investment_name?: string | null;
@@ -114,6 +115,7 @@ type ContractCustomValue = {
 type ContractRow = {
   id: string;
   code: string;
+  assetName: string | null;
   client: string;
   investmentName: string | null;
   city: string;
@@ -170,6 +172,7 @@ function rowMatchesQuery(row: ContractRow, ql: string): boolean {
     .join(" ");
   const hay = [
     row.code,
+    row.assetName,
     row.client,
     row.investmentName,
     row.city,
@@ -225,6 +228,8 @@ function ContractDetailDialog({
             <dd>
               {row.city} · {row.address}
             </dd>
+            <dt className="text-muted-foreground">Nazwa nośnika</dt>
+            <dd>{row.assetName || "—"}</dd>
             <dt className="text-muted-foreground">Inwestycja</dt>
             <dd>{row.investmentName || "—"}</dd>
             <dt className="text-muted-foreground">GPS</dt>
@@ -446,7 +451,11 @@ function ContractsPage() {
       const mapped: ContractRow[] = items.map((item) => ({
         id: item.id,
         code:
-          item.contract_number || item.billboard_code || `CTR-${item.id.slice(0, 8).toUpperCase()}`,
+          item.asset_name ||
+          item.billboard_code ||
+          item.contract_number ||
+          `CTR-${item.id.slice(0, 8).toUpperCase()}`,
+        assetName: item.asset_name?.trim() || null,
         client: item.advertiser_name,
         investmentName: item.investment_name?.trim() || null,
         city: item.city || "—",
@@ -610,6 +619,7 @@ function ContractsPage() {
               return {
                 id: b.id,
                 code: b.code,
+                assetName: null,
                 client: b.client || "—",
                 investmentName: null,
                 city: b.city,

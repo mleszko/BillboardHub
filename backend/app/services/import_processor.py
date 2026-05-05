@@ -29,6 +29,7 @@ _MAPS_APP_HOSTS = {"maps.app.goo.gl", "www.maps.app.goo.gl"}
 _CONTACT_PERSON_MAX_LEN = 255
 _CONTACT_PHONE_MAX_LEN = 64
 _CONTACT_EMAIL_MAX_LEN = 255
+_ASSET_NAME_MAX_LEN = 255
 _GOOGLE_COORD_PATTERNS = (
     re.compile(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
     re.compile(r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
@@ -54,6 +55,7 @@ def normalize_value(target_field_name: str, value: Any) -> Any:
         "property_owner_name",
         "billboard_code",
         "billboard_type",
+        "asset_name",
         "surface_size",
         "location_address",
         "city",
@@ -252,6 +254,23 @@ def _norm_key(value: Any) -> str | None:
     return s.lower() if s else None
 
 
+def _normalize_text_for_key(value: Any) -> str | None:
+    raw = _norm_key(value)
+    if not raw:
+        return None
+    normalized = re.sub(r"\s+", " ", raw).strip()
+    return normalized or None
+
+
+def _normalize_address_for_key(value: Any) -> str | None:
+    normalized = _normalize_text_for_key(value)
+    if not normalized:
+        return None
+    normalized = re.sub(r"[,.]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or None
+
+
 def _dedupe_key(normalized_payload: dict[str, Any]) -> tuple[str, str] | None:
     contract_number = _norm_key(normalized_payload.get("contract_number"))
     if contract_number:
@@ -259,6 +278,11 @@ def _dedupe_key(normalized_payload: dict[str, Any]) -> tuple[str, str] | None:
     billboard_code = _norm_key(normalized_payload.get("billboard_code"))
     if billboard_code:
         return ("billboard_code", billboard_code)
+    asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
+    city = _normalize_text_for_key(normalized_payload.get("city"))
+    address = _normalize_address_for_key(normalized_payload.get("location_address"))
+    if asset_name and city and address:
+        return ("asset_location_v1", f"{asset_name}|{city}|{address}")
     advertiser = _norm_key(normalized_payload.get("advertiser_name"))
     city = _norm_key(normalized_payload.get("city"))
     address = _norm_key(normalized_payload.get("location_address"))
@@ -266,6 +290,87 @@ def _dedupe_key(normalized_payload: dict[str, Any]) -> tuple[str, str] | None:
     if advertiser and city and address and expiry:
         return ("composite_v1", f"{advertiser}|{city}|{address}|{expiry}")
     return None
+
+
+def _all_match_keys(normalized_payload: dict[str, Any]) -> list[tuple[str, str]]:
+    keys: list[tuple[str, str]] = []
+    primary = _dedupe_key(normalized_payload)
+    if primary:
+        keys.append(primary)
+    contract_number = _normalize_text_for_key(normalized_payload.get("contract_number"))
+    if contract_number and ("contract_number", contract_number) not in keys:
+        keys.append(("contract_number", contract_number))
+    billboard_code = _normalize_text_for_key(normalized_payload.get("billboard_code"))
+    if billboard_code and ("billboard_code", billboard_code) not in keys:
+        keys.append(("billboard_code", billboard_code))
+    asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
+    city = _normalize_text_for_key(normalized_payload.get("city"))
+    address = _normalize_address_for_key(normalized_payload.get("location_address"))
+    if asset_name and city and address:
+        asset_location = ("asset_location_v1", f"{asset_name}|{city}|{address}")
+        if asset_location not in keys:
+            keys.append(asset_location)
+    advertiser = _normalize_text_for_key(normalized_payload.get("advertiser_name"))
+    expiry = _normalize_text_for_key(normalized_payload.get("expiry_date"))
+    if advertiser and city and address and expiry:
+        composite = ("composite_v1", f"{advertiser}|{city}|{address}|{expiry}")
+        if composite not in keys:
+            keys.append(composite)
+    return keys
+
+
+def _contract_match_keys(contract: Contract) -> list[tuple[str, str]]:
+    payload = {
+        "contract_number": contract.contract_number,
+        "billboard_code": contract.billboard_code,
+        "asset_name": contract.asset_name,
+        "city": contract.city,
+        "location_address": contract.location_address,
+        "advertiser_name": contract.advertiser_name,
+        "expiry_date": contract.expiry_date.isoformat() if contract.expiry_date else None,
+    }
+    keys = _all_match_keys(payload)
+    source_file_name = (contract.source_file_name or "").strip()
+    if source_file_name and contract.source_row_number is not None:
+        keys.insert(0, ("source_file_row", f"{source_file_name}|{contract.source_row_number}"))
+    return keys
+
+
+def _register_contract_match_keys(
+    existing_by_key: dict[tuple[str, str], list[Contract]],
+    contract: Contract,
+) -> None:
+    for match_key in _contract_match_keys(contract):
+        bucket = existing_by_key.setdefault(match_key, [])
+        if any(item.id == contract.id for item in bucket):
+            continue
+        bucket.append(contract)
+
+
+def _pick_matching_existing_contract(
+    *,
+    existing_by_key: dict[tuple[str, str], list[Contract]],
+    row_match_keys: list[tuple[str, str]],
+    used_existing_contract_ids: set[str],
+) -> Contract | None:
+    for match_key in row_match_keys:
+        for candidate in existing_by_key.get(match_key, []):
+            if candidate.id in used_existing_contract_ids:
+                continue
+            return candidate
+    return None
+
+
+async def apply_source_of_truth_contract_sync(
+    db: AsyncSession,
+    *,
+    owner_user_id: str,
+    keep_contract_ids: set[str],
+) -> None:
+    delete_stmt = delete(Contract).where(Contract.owner_user_id == owner_user_id)
+    if keep_contract_ids:
+        delete_stmt = delete_stmt.where(~Contract.id.in_(keep_contract_ids))
+    await db.execute(delete_stmt)
 
 
 def _attempt_llm_row_repair(
@@ -313,6 +418,9 @@ def _attempt_llm_row_repair(
 async def confirm_mapping_and_import(
     db: AsyncSession,
     payload: ImportMappingConfirmationRequest,
+    *,
+    apply_source_of_truth: bool = True,
+    preserve_contract_ids: set[str] | None = None,
 ) -> ImportExecuteResponse:
     session = await db.get(ImportSession, payload.session_id)
     if session is None or session.owner_user_id != payload.owner_user_id:
@@ -391,23 +499,15 @@ async def confirm_mapping_and_import(
     gps_shortlink_resolved = 0
     gps_shortlink_unresolved = 0
     gps_unparseable = 0
+    gps_resolution_cache: dict[str, tuple[float, float] | None] = {}
     existing_contracts = (
         await db.execute(select(Contract).where(Contract.owner_user_id == payload.owner_user_id))
     ).scalars().all()
-    existing_by_key: dict[tuple[str, str], Contract] = {}
+    existing_by_key: dict[tuple[str, str], list[Contract]] = {}
+    used_existing_contract_ids: set[str] = set()
     for contract in existing_contracts:
-        contract_number_key = _norm_key(contract.contract_number)
-        if contract_number_key:
-            existing_by_key[("contract_number", contract_number_key)] = contract
-        billboard_code_key = _norm_key(contract.billboard_code)
-        if billboard_code_key:
-            existing_by_key[("billboard_code", billboard_code_key)] = contract
-        advertiser_key = _norm_key(contract.advertiser_name)
-        city_key = _norm_key(contract.city)
-        address_key = _norm_key(contract.location_address)
-        expiry_key = _norm_key(contract.expiry_date.isoformat() if contract.expiry_date else None)
-        if advertiser_key and city_key and address_key and expiry_key:
-            existing_by_key[("composite_v1", f"{advertiser_key}|{city_key}|{address_key}|{expiry_key}")] = contract
+        _register_contract_match_keys(existing_by_key, contract)
+    contract_ids_to_keep = set(preserve_contract_ids or set())
 
     mapped_target_fields = sorted(set(mapped_columns.values()))
     logger.info(
@@ -468,7 +568,9 @@ async def confirm_mapping_and_import(
                 gps_inline_resolved += 1
             else:
                 if _is_maps_app_shortlink(gps_link_str):
-                    resolved = _resolve_maps_app_shortlink(gps_link_str)
+                    if gps_link_str not in gps_resolution_cache:
+                        gps_resolution_cache[gps_link_str] = _resolve_maps_app_shortlink(gps_link_str)
+                    resolved = gps_resolution_cache[gps_link_str]
                     if resolved is not None:
                         gps_shortlink_resolved += 1
                     else:
@@ -537,7 +639,12 @@ async def confirm_mapping_and_import(
             dedupe_key_counts[key] += 1
         else:
             rows_without_dedupe_key += 1
-        existing_contract = existing_by_key.get(key) if key else None
+        row_match_keys = _all_match_keys(normalized_payload)
+        existing_contract = _pick_matching_existing_contract(
+            existing_by_key=existing_by_key,
+            row_match_keys=row_match_keys,
+            used_existing_contract_ids=used_existing_contract_ids,
+        )
 
         if existing_contract is not None:
             rows_matched_existing += 1
@@ -548,6 +655,10 @@ async def confirm_mapping_and_import(
             existing_contract.investment_name = normalized_payload.get("investment_name")
             existing_contract.property_owner_name = normalized_payload.get("property_owner_name")
             existing_contract.billboard_code = normalized_payload.get("billboard_code")
+            existing_contract.asset_name = _to_limited_text(
+                normalized_payload.get("asset_name"),
+                _ASSET_NAME_MAX_LEN,
+            )
             existing_contract.billboard_type = _coerce_billboard_type(normalized_payload.get("billboard_type"))
             existing_contract.surface_size = normalized_payload.get("surface_size")
             existing_contract.location_address = normalized_payload.get("location_address")
@@ -576,9 +687,9 @@ async def confirm_mapping_and_import(
             existing_contract.notes = normalized_payload.get("notes")
             existing_contract.gps_coordinates_raw = normalized_payload.get("gps_coordinates")
             contracts_to_update.append(existing_contract)
-            refreshed_key = _dedupe_key(normalized_payload)
-            if refreshed_key:
-                existing_by_key[refreshed_key] = existing_contract
+            used_existing_contract_ids.add(existing_contract.id)
+            contract_ids_to_keep.add(existing_contract.id)
+            _register_contract_match_keys(existing_by_key, existing_contract)
             if advertiser_fallback_applied and len(invalid_preview) < 10:
                 invalid_preview.append(
                     {
@@ -603,6 +714,10 @@ async def confirm_mapping_and_import(
                 investment_name=normalized_payload.get("investment_name"),
                 property_owner_name=normalized_payload.get("property_owner_name"),
                 billboard_code=normalized_payload.get("billboard_code"),
+                asset_name=_to_limited_text(
+                    normalized_payload.get("asset_name"),
+                    _ASSET_NAME_MAX_LEN,
+                ),
                 billboard_type=_coerce_billboard_type(normalized_payload.get("billboard_type")),
                 surface_size=normalized_payload.get("surface_size"),
                 location_address=normalized_payload.get("location_address"),
@@ -632,9 +747,6 @@ async def confirm_mapping_and_import(
                 gps_coordinates_raw=normalized_payload.get("gps_coordinates"),
             )
             contracts_to_create.append(contract)
-            created_key = _dedupe_key(normalized_payload)
-            if created_key:
-                existing_by_key[created_key] = contract
             if advertiser_fallback_applied and len(invalid_preview) < 10:
                 invalid_preview.append(
                     {
@@ -692,6 +804,16 @@ async def confirm_mapping_and_import(
     )
 
     await db.flush()
+    for contract in contracts_to_create:
+        contract_ids_to_keep.add(contract.id)
+        _register_contract_match_keys(existing_by_key, contract)
+
+    if apply_source_of_truth:
+        await apply_source_of_truth_contract_sync(
+            db,
+            owner_user_id=session.owner_user_id,
+            keep_contract_ids=contract_ids_to_keep,
+        )
     if contracts_to_create:
         await compute_active_columns_for_contracts(
             db=db,

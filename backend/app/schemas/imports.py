@@ -6,6 +6,7 @@ CANONICAL_FIELDS = [
     "advertiser_name",
     "property_owner_name",
     "billboard_code",
+    "asset_name",
     "billboard_type",
     "surface_size",
     "location_address",
@@ -148,6 +149,7 @@ class ContractsListItem(BaseModel):
     id: str
     contract_number: str | None
     billboard_code: str | None = None
+    asset_name: str | None = None
     billboard_type: str | None = None
     advertiser_name: str
     property_owner_name: str | None = None

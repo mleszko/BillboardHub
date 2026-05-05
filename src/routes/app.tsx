@@ -68,6 +68,7 @@ type ContractItem = {
   id: string;
   contract_number: string | null;
   billboard_code: string | null;
+  asset_name?: string | null;
   billboard_type: string | null;
   advertiser_name: string;
   city: string | null;
@@ -88,7 +89,7 @@ type DashboardRow = {
   id: string;
   advertiserName: string;
   city: string | null;
-  reference: string | null;
+  reference: string;
   locationAddress: string | null;
   expiryDate: string;
   expiryUnknown: boolean;
@@ -245,7 +246,7 @@ function AppPage() {
       id: c.id,
       advertiserName: c.advertiser_name,
       city: c.city,
-      reference: c.contract_number || c.billboard_code,
+      reference: c.asset_name || c.billboard_code || c.contract_number || "—",
       locationAddress: c.location_address,
       expiryDate: c.expiry_date,
       expiryUnknown: Boolean(c.expiry_unknown),
@@ -272,7 +273,7 @@ function AppPage() {
         if (!ql) return true;
         return (
           b.advertiserName.toLowerCase().includes(ql) ||
-          (b.reference || "").toLowerCase().includes(ql) ||
+          b.reference.toLowerCase().includes(ql) ||
           (b.city || "").toLowerCase().includes(ql) ||
           (b.locationAddress || "").toLowerCase().includes(ql)
         );
@@ -338,7 +339,7 @@ function AppPage() {
         id: 2,
         type: "alert",
         text: nextExpiring
-          ? `${nextExpiring.advertiserName} — umowa wygasa za ${nextExpiring.days} dni (${nextExpiring.reference || "brak numeru"})`
+          ? `${nextExpiring.advertiserName} — umowa wygasa za ${nextExpiring.days} dni (${nextExpiring.reference})`
           : "Brak umów z bliskim terminem wygaśnięcia.",
         when: "na żywo",
       },
@@ -590,7 +591,7 @@ function AppPage() {
                         <div className="min-w-0">
                           <div className="font-semibold leading-tight">{b.advertiserName}</div>
                           <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {b.city || "—"} · {b.reference || "Brak numeru umowy"}
+                            {b.city || "—"} · {b.reference}
                           </div>
                         </div>
                         <StatusBadge status={b.badgeStatus} />
@@ -684,9 +685,7 @@ function AppPage() {
                       >
                         <td className="px-4 py-3">
                           <div className="font-medium">{b.city || "—"}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {b.reference || "Brak numeru umowy"}
-                          </div>
+                          <div className="text-xs text-muted-foreground">{b.reference}</div>
                         </td>
                         <td className="px-4 py-3 font-medium">{b.advertiserName}</td>
                         <td className="px-4 py-3">

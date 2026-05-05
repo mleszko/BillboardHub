@@ -36,6 +36,7 @@ type BackendContract = {
   id: string;
   contract_number: string | null;
   billboard_code: string | null;
+  asset_name?: string | null;
   billboard_type: string | null;
   advertiser_name: string;
   city: string | null;
@@ -163,7 +164,7 @@ function fallbackCoords(item: BackendContract): { lat: number; lng: number } | n
 
   const center = CITY_CENTERS[rawCity];
   if (!center) return null;
-  const seed = `${item.id}:${item.location_address || ""}:${item.contract_number || ""}`;
+  const seed = `${item.id}:${item.location_address || ""}:${item.asset_name || item.billboard_code || ""}`;
   const jitterLat = (hash01(`${seed}:lat`) - 0.5) * 0.06;
   const jitterLng = (hash01(`${seed}:lng`) - 0.5) * 0.1;
   return { lat: center.lat + jitterLat, lng: center.lng + jitterLng };
@@ -232,6 +233,7 @@ function MapPage() {
         return {
           id: item.id,
           code:
+            item.asset_name ||
             item.billboard_code ||
             item.contract_number ||
             `CTR-${item.id.slice(0, 8).toUpperCase()}`,

@@ -260,8 +260,10 @@ function ImportPage() {
       const data = (await response.json()) as { file_name: string; sheets: InspectSheet[] };
       setInspectFileName(data.file_name);
       setInspectSheets(data.sheets);
-      const first = data.sheets[0]?.name ?? "";
-      setSelectedSheets(first ? [first] : []);
+      const defaultSheets = data.sheets
+        .filter((sheet) => sheet.row_count > 0 && sheet.column_count > 0)
+        .map((sheet) => sheet.name);
+      setSelectedSheets(defaultSheets);
       setStage("configure");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Błąd podglądu pliku.");

@@ -90,6 +90,7 @@ class Contract(Base):
     investment_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     property_owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     billboard_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    asset_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     billboard_type: Mapped[BillboardType] = mapped_column(SQLEnum(BillboardType), default=BillboardType.other, nullable=False)
     location_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
