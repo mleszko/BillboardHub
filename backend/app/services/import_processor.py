@@ -105,12 +105,16 @@ def _extract_google_coords_from_url(url: str) -> tuple[float, float] | None:
     return None
 
 
-def _resolve_maps_app_shortlink(gps_link: str) -> tuple[float, float] | None:
-    settings = get_settings()
+def _is_maps_app_shortlink(gps_link: str) -> bool:
     parsed = urlparse(gps_link.strip())
     if parsed.scheme not in {"http", "https"}:
-        return None
-    if parsed.netloc.lower() not in _MAPS_APP_HOSTS:
+        return False
+    return parsed.netloc.lower() in _MAPS_APP_HOSTS
+
+
+def _resolve_maps_app_shortlink(gps_link: str) -> tuple[float, float] | None:
+    settings = get_settings()
+    if not _is_maps_app_shortlink(gps_link):
         return None
     try:
         with urlopen(gps_link, timeout=settings.maps_link_resolve_timeout_seconds) as resp:  # noqa: S310
@@ -382,6 +386,11 @@ async def confirm_mapping_and_import(
     rows_without_dedupe_key = 0
     rows_matched_existing = 0
     rows_created_new = 0
+    gps_links_total = 0
+    gps_inline_resolved = 0
+    gps_shortlink_resolved = 0
+    gps_shortlink_unresolved = 0
+    gps_unparseable = 0
     existing_contracts = (
         await db.execute(select(Contract).where(Contract.owner_user_id == payload.owner_user_id))
     ).scalars().all()
@@ -451,15 +460,22 @@ async def confirm_mapping_and_import(
 
         gps_link = normalized_payload.get("gps_coordinates")
         if gps_link:
-            resolved = _resolve_maps_app_shortlink(str(gps_link))
-            if resolved is None:
-                validation_errors.append(
-                    {
-                        "field": "gps_coordinates",
-                        "reason": "Koordynaty GPS muszą być linkiem maps.app.goo.gl z możliwymi do odczytu współrzędnymi.",
-                    }
-                )
+            gps_links_total += 1
+            gps_link_str = str(gps_link).strip()
+            normalized_payload["gps_coordinates"] = gps_link_str
+            resolved = _extract_google_coords_from_url(gps_link_str)
+            if resolved is not None:
+                gps_inline_resolved += 1
             else:
+                if _is_maps_app_shortlink(gps_link_str):
+                    resolved = _resolve_maps_app_shortlink(gps_link_str)
+                    if resolved is not None:
+                        gps_shortlink_resolved += 1
+                    else:
+                        gps_shortlink_unresolved += 1
+                else:
+                    gps_unparseable += 1
+            if resolved is not None:
                 normalized_payload["latitude"] = Decimal(str(resolved[0]))
                 normalized_payload["longitude"] = Decimal(str(resolved[1]))
 
@@ -655,7 +671,7 @@ async def confirm_mapping_and_import(
             "max_group_size": int(max(repeated_groups) if repeated_groups else 0),
         }
     logger.info(
-        "import_confirm_summary session_id=%s file_name=%s total_rows=%d valid_rows=%d invalid_rows=%d imported_rows=%d created=%d updated=%d rows_without_dedupe_key=%d llm_repairs_used=%d validation_top=%s dedupe_collisions=%s",
+        "import_confirm_summary session_id=%s file_name=%s total_rows=%d valid_rows=%d invalid_rows=%d imported_rows=%d created=%d updated=%d rows_without_dedupe_key=%d llm_repairs_used=%d gps_links_total=%d gps_inline_resolved=%d gps_shortlink_resolved=%d gps_shortlink_unresolved=%d gps_unparseable=%d validation_top=%s dedupe_collisions=%s",
         session.id,
         session.original_file_name,
         session.total_rows,
@@ -666,6 +682,11 @@ async def confirm_mapping_and_import(
         rows_matched_existing,
         rows_without_dedupe_key,
         llm_repairs_used,
+        gps_links_total,
+        gps_inline_resolved,
+        gps_shortlink_resolved,
+        gps_shortlink_unresolved,
+        gps_unparseable,
         dict(validation_reason_counts.most_common(8)),
         dedupe_collision_summary,
     )
