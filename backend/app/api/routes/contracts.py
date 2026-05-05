@@ -25,7 +25,11 @@ def _decimal_to_float(value: Decimal | None) -> float | None:
     return float(value)
 
 
-def _contract_to_dict(contract: Contract) -> dict[str, object | None]:
+def _contract_to_dict(
+    contract: Contract,
+    *,
+    photo_url_override: str | None = None,
+) -> dict[str, object | None]:
     return {
         "id": contract.id,
         "contract_number": contract.contract_number,
@@ -50,7 +54,7 @@ def _contract_to_dict(contract: Contract) -> dict[str, object | None]:
         "contact_phone": contract.contact_phone,
         "contact_email": contract.contact_email,
         "notes": contract.notes,
-        "photo_url": contract.photo_url,
+        "photo_url": photo_url_override if photo_url_override is not None else contract.photo_url,
     }
 
 
@@ -82,6 +86,31 @@ def _supabase_storage_client():
             ),
         )
     return create_client(settings.supabase_url, settings.supabase_service_role_key).storage
+
+
+def _extract_signed_url(value: object) -> str | None:
+    if isinstance(value, str):
+        return value or None
+    if isinstance(value, dict):
+        raw = value.get("signedURL") or value.get("signedUrl")
+        return str(raw) if raw else None
+    raw = getattr(value, "signedURL", None) or getattr(value, "signedUrl", None)
+    return str(raw) if raw else None
+
+
+def _create_photo_url_for_contract(contract: Contract, *, signed_url_ttl_seconds: int = 86_400) -> str | None:
+    if not contract.photo_path:
+        return contract.photo_url
+
+    settings = get_settings()
+    try:
+        storage = _supabase_storage_client()
+        signed = storage.from_(settings.contract_photo_bucket).create_signed_url(
+            contract.photo_path, signed_url_ttl_seconds
+        )
+    except Exception:  # noqa: BLE001
+        return contract.photo_url
+    return _extract_signed_url(signed) or contract.photo_url
 
 
 @router.get("", response_model=ContractsListResponse)
@@ -117,6 +146,10 @@ async def list_contracts(
     for value in values:
         values_by_contract.setdefault(value.contract_id, {})[value.column_id] = value
 
+    photo_url_by_contract: dict[str, str | None] = {
+        contract.id: _create_photo_url_for_contract(contract) for contract in contracts
+    }
+
     return ContractsListResponse(
         custom_columns=[
             ContractCustomColumnItem(
@@ -132,7 +165,7 @@ async def list_contracts(
         ],
         items=[
             {
-                **_contract_to_dict(contract),
+                **_contract_to_dict(contract, photo_url_override=photo_url_by_contract.get(contract.id)),
                 "custom_values": {
                     column_id: ContractCustomValueItem(
                         status=stored_value.status.value,
