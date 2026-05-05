@@ -32,8 +32,8 @@ const PHOTO_SOURCE_SOFT_LIMIT_BYTES = 12_000_000;
 export type ContractFormValues = {
   id?: string;
   advertiser_name: string;
+  contract_number: string;
   billboard_code: string;
-  asset_name: string;
   investment_name: string;
   city: string;
   location_address: string;
@@ -53,8 +53,8 @@ export type ContractFormValues = {
 export function emptyContractForm(): ContractFormValues {
   return {
     advertiser_name: "",
+    contract_number: "",
     billboard_code: "",
-    asset_name: "",
     investment_name: "",
     city: "",
     location_address: "",
@@ -76,7 +76,6 @@ type ApiContract = {
   id: string;
   contract_number: string | null;
   billboard_code: string | null;
-  asset_name?: string | null;
   billboard_type: string | null;
   advertiser_name: string;
   investment_name?: string | null;
@@ -98,8 +97,8 @@ export function apiContractToFormValues(c: ApiContract): ContractFormValues {
   return {
     id: c.id,
     advertiser_name: c.advertiser_name,
+    contract_number: c.contract_number ?? "",
     billboard_code: c.billboard_code ?? "",
-    asset_name: c.asset_name ?? "",
     investment_name: c.investment_name ?? "",
     city: c.city ?? "",
     location_address: c.location_address ?? "",
@@ -121,8 +120,8 @@ export function billboardToFormValues(b: Billboard): ContractFormValues {
   return {
     id: b.id,
     advertiser_name: b.client ?? "",
+    contract_number: "",
     billboard_code: b.code,
-    asset_name: "",
     investment_name: "",
     city: b.city,
     location_address: b.address,
@@ -310,8 +309,8 @@ function buildApiCreatePayload(form: ContractFormValues) {
   const monthlyRaw = form.monthly_rent_net.trim().replace(",", ".");
   return {
     advertiser_name: form.advertiser_name.trim(),
+    contract_number: form.contract_number.trim() || undefined,
     billboard_code: form.billboard_code.trim() || undefined,
-    asset_name: form.asset_name.trim() || undefined,
     investment_name: form.investment_name.trim() || undefined,
     city: form.city.trim() || undefined,
     location_address: form.location_address.trim() || undefined,
@@ -332,8 +331,8 @@ function buildApiPatchPayload(form: ContractFormValues) {
   const monthlyRaw = form.monthly_rent_net.trim().replace(",", ".");
   return {
     advertiser_name: form.advertiser_name.trim(),
+    contract_number: form.contract_number.trim() || null,
     billboard_code: form.billboard_code.trim() || null,
-    asset_name: form.asset_name.trim() || null,
     investment_name: form.investment_name.trim() || null,
     city: form.city.trim() || null,
     location_address: form.location_address.trim() || null,
@@ -545,12 +544,11 @@ export function ContractFormDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="cf-asset-name">Nazwa nośnika (lokalna)</Label>
+              <Label htmlFor="cf-contract-no">Nr umowy</Label>
               <Input
-                id="cf-asset-name"
-                value={form.asset_name}
-                onChange={(e) => setForm((f) => ({ ...f, asset_name: e.target.value }))}
-                placeholder='np. "u matematyka"'
+                id="cf-contract-no"
+                value={form.contract_number}
+                onChange={(e) => setForm((f) => ({ ...f, contract_number: e.target.value }))}
               />
             </div>
           </div>

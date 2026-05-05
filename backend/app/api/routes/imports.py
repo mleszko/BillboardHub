@@ -28,14 +28,10 @@ from app.schemas.imports import (
     SheetMappingProposalItem,
     REQUIRED_IMPORT_FIELDS,
 )
-from app.services.import_excel import (
-    collapse_wide_month_columns,
-    list_excel_sheet_info,
-    read_tabular_dataframe,
-)
+from app.services.import_excel import collapse_wide_month_columns, list_excel_sheet_info, read_tabular_dataframe
 from app.services.import_guesser import heuristic_mapping_proposals
 from app.services.import_adapters import try_known_adapter
-from app.services.import_processor import apply_source_of_truth_contract_sync, confirm_mapping_and_import
+from app.services.import_processor import confirm_mapping_and_import
 from app.services.import_templates import IMPORT_TEMPLATE_PRESETS
 from app.services.llm_gateway import chat_json_with_fallback
 
@@ -90,18 +86,6 @@ def _normalize_sheet_names(sheet_name: str, sheet_names: list[str] | None) -> li
         return out
     fallback = sheet_name.strip()
     return [fallback] if fallback else []
-
-
-def _all_non_empty_excel_sheets(file_name: str, file_bytes: bytes) -> list[str]:
-    lower = file_name.lower()
-    if not lower.endswith((".xlsx", ".xls")):
-        return []
-    sheet_info = list_excel_sheet_info(file_bytes, file_name)
-    return [
-        sheet["name"]
-        for sheet in sheet_info
-        if int(sheet.get("row_count", 0)) > 0 and int(sheet.get("column_count", 0)) > 0
-    ]
 
 
 def _contract_model_fields() -> list[str]:
@@ -239,15 +223,6 @@ async def generate_mapping_proposal(
     lower = file_name.lower()
 
     selected_sheets = _normalize_sheet_names(sheet_name, sheet_names)
-    if not selected_sheets and lower.endswith((".xlsx", ".xls")):
-        selected_sheets = _all_non_empty_excel_sheets(file_name, file_bytes)
-    if lower.endswith((".xlsx", ".xls")) and not selected_sheets:
-        inspected = list_excel_sheet_info(file_bytes, file_name)
-        selected_sheets = [
-            sheet["name"]
-            for sheet in inspected
-            if int(sheet.get("row_count", 0)) > 0 and int(sheet.get("column_count", 0)) > 0
-        ]
     sheet_arg: str | int | None
     if lower.endswith(".csv"):
         sheet_arg = None
@@ -535,7 +510,6 @@ async def confirm_mapping_batch(
     invalid_rows = 0
     imported_rows = 0
     errors_preview: list[dict[str, Any]] = []
-    contract_ids_to_keep: set[str] = set()
 
     for sheet_payload in payload.sheets:
         single_request = ImportMappingConfirmationRequest(
@@ -545,12 +519,7 @@ async def confirm_mapping_batch(
             sheet_overrides=sheet_payload.sheet_overrides,
         )
         try:
-            result = await confirm_mapping_and_import(
-                db=db,
-                payload=single_request,
-                apply_source_of_truth=False,
-                preserve_contract_ids=contract_ids_to_keep,
-            )
+            result = await confirm_mapping_and_import(db=db, payload=single_request)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         total_rows += result.total_rows
@@ -559,13 +528,6 @@ async def confirm_mapping_batch(
         imported_rows += result.imported_rows
         errors_preview.extend(result.errors_preview or [])
         results.append(SheetImportExecuteItem(sheet_name=sheet_payload.sheet_name, result=result))
-
-    await apply_source_of_truth_contract_sync(
-        db,
-        owner_user_id=payload.owner_user_id,
-        keep_contract_ids=contract_ids_to_keep,
-    )
-    await db.commit()
 
     return ImportExecuteBatchResponse(
         owner_user_id=payload.owner_user_id,

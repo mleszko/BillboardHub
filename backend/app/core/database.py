@@ -16,7 +16,6 @@ _CONTRACT_ALTER_COLUMNS: tuple[tuple[str, str], ...] = (
     ("contact_phone", "VARCHAR(64)"),
     ("contact_email", "VARCHAR(255)"),
     ("total_contract_value_net", "NUMERIC(14, 2)"),
-    ("asset_name", "VARCHAR(255)"),
     ("investment_name", "VARCHAR(255)"),
     ("gps_coordinates_raw", "VARCHAR(255)"),
     ("photo_path", "TEXT"),
@@ -29,7 +28,6 @@ _CONTRACT_VARCHAR_TARGET_LENGTHS: dict[str, int] = {
     "contact_person": 255,
     "contact_phone": 64,
     "contact_email": 255,
-    "asset_name": 255,
     "investment_name": 255,
     "gps_coordinates_raw": 255,
 }

@@ -66,13 +66,6 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "nr_umowy": [("contract_number", 0.9)],
     "numer_umowy": [("contract_number", 0.9)],
     "nosnik": [("billboard_code", 0.82), ("billboard_type", 0.5)],
-    "nazwa_nosnika": [("asset_name", 0.95)],
-    "nazwa_nośnika": [("asset_name", 0.95)],
-    "nosnik_nazwa": [("asset_name", 0.94)],
-    "nosnik_opis": [("asset_name", 0.94)],
-    "opis_nosnika": [("asset_name", 0.94)],
-    "lokalna_nazwa_nosnika": [("asset_name", 0.95)],
-    "nazwa_lokalna": [("asset_name", 0.9)],
     "typ": [("billboard_type", 0.8)],
     "czynsz_netto": [("monthly_rent_net", 0.92)],
     "czynsz_brutto": [("monthly_rent_gross", 0.92)],
@@ -107,7 +100,6 @@ CONTAINS_HEADER_HINTS: tuple[tuple[str, str, float], ...] = (
     ("email", "contact_email", 0.84),
     ("e_mail", "contact_email", 0.84),
     ("mail", "contact_email", 0.82),
-    ("nazwa", "asset_name", 0.65),
 )
 
 
