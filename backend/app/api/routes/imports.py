@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 from typing import Any
 
 import pandas as pd
@@ -36,6 +37,7 @@ from app.services.import_templates import IMPORT_TEMPLATE_PRESETS
 from app.services.llm_gateway import chat_json_with_fallback
 
 router = APIRouter(prefix="/imports", tags=["imports"])
+logger = logging.getLogger(__name__)
 
 PROMPT_VERSION = "v1"
 LP_COLUMN_TOKENS = frozenset({"l.p", "lp", "l_p", "l p"})
@@ -340,6 +342,26 @@ async def generate_mapping_proposal(
 
     await db.commit()
 
+    mapped_targets = sorted(
+        {
+            suggestion.target_field_name
+            for suggestion in proposals
+            if suggestion.target_field_name
+        }
+    )
+    logger.info(
+        "import_guess_summary session_id=%s user_id=%s file_name=%s sheets=%s total_rows=%d columns=%d mapped_targets=%s model=%s warning=%s",
+        import_session.id,
+        user_id,
+        file_name,
+        selected_sheets if selected_sheets else ([sheet_arg] if sheet_arg not in (None, "") else ["(csv)"]),
+        len(all_rows),
+        len(source_columns),
+        ",".join(mapped_targets) if mapped_targets else "-",
+        guessed_by_model,
+        warning or "-",
+    )
+
     return ImportMappingProposalResponse(
         session_id=import_session.id,
         file_name=import_session.original_file_name,
@@ -398,6 +420,17 @@ async def guess_mapping(
     user: UserContext = Depends(ensure_profile),
     db: AsyncSession = Depends(get_db),
 ) -> ImportMappingProposalResponse:
+    logger.info(
+        "import_guess_request user_id=%s file_name=%s sheet_name=%s sheet_names=%s header_row_1based=%d skip_rows_before_header=%d unpivot_month_columns=%s monthly_aggregate=%s",
+        user.user_id,
+        file.filename or "uploaded-file",
+        sheet_name,
+        sheet_names,
+        header_row_1based,
+        skip_rows_before_header,
+        unpivot_month_columns,
+        monthly_aggregate,
+    )
     try:
         return await generate_mapping_proposal(
             db=db,
@@ -483,6 +516,13 @@ async def confirm_mapping(
             detail="You can only confirm your own import sessions.",
         )
 
+    logger.info(
+        "import_confirm_request session_id=%s owner_user_id=%s mapping_items=%d sheet_overrides=%d",
+        payload.session_id,
+        payload.owner_user_id,
+        len(payload.mapping),
+        len(payload.sheet_overrides),
+    )
     try:
         return await confirm_mapping_and_import(db=db, payload=payload)
     except ValueError as exc:

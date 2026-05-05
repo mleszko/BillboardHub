@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 import json
 import math
 import re
+from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -32,6 +34,7 @@ _GOOGLE_COORD_PATTERNS = (
     re.compile(r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
     re.compile(r"[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)"),
 )
+logger = logging.getLogger(__name__)
 
 
 def normalize_value(target_field_name: str, value: Any) -> Any:
@@ -374,6 +377,11 @@ async def confirm_mapping_and_import(
     invalid_rows = 0
     llm_repairs_used = 0
     llm_repair_limit = 25
+    dedupe_key_counts: Counter[tuple[str, str]] = Counter()
+    validation_reason_counts: Counter[str] = Counter()
+    rows_without_dedupe_key = 0
+    rows_matched_existing = 0
+    rows_created_new = 0
     existing_contracts = (
         await db.execute(select(Contract).where(Contract.owner_user_id == payload.owner_user_id))
     ).scalars().all()
@@ -392,9 +400,22 @@ async def confirm_mapping_and_import(
         if advertiser_key and city_key and address_key and expiry_key:
             existing_by_key[("composite_v1", f"{advertiser_key}|{city_key}|{address_key}|{expiry_key}")] = contract
 
+    mapped_target_fields = sorted(set(mapped_columns.values()))
+    logger.info(
+        "import_confirm_start session_id=%s file_name=%s source_rows=%d mapped_columns=%d mapped_targets=%s sheet_overrides=%d existing_contracts=%d",
+        session.id,
+        session.original_file_name,
+        len(source_rows),
+        len(mapped_columns),
+        ",".join(mapped_target_fields) if mapped_target_fields else "-",
+        len(sheet_mapped_columns),
+        len(existing_contracts),
+    )
+
     for row_index, raw_row in enumerate(source_rows, start=1):
         if not isinstance(raw_row, dict):
             invalid_rows += 1
+            validation_reason_counts["row:Invalid row payload"] += 1
             if len(invalid_preview) < 10:
                 invalid_preview.append({"row": row_index, "errors": [{"field": "row", "reason": "Invalid row payload"}]})
             continue
@@ -484,6 +505,10 @@ async def confirm_mapping_and_import(
 
         if validation_errors:
             invalid_rows += 1
+            for err in validation_errors:
+                field = str(err.get("field") or "unknown")
+                reason = str(err.get("reason") or "unknown")
+                validation_reason_counts[f"{field}:{reason}"] += 1
             if len(invalid_preview) < 10:
                 invalid_preview.append(
                     {"row": row_index, "errors": validation_errors, "raw_excerpt": _raw_row_excerpt(raw_row)}
@@ -492,9 +517,14 @@ async def confirm_mapping_and_import(
 
         valid_rows += 1
         key = _dedupe_key(normalized_payload)
+        if key:
+            dedupe_key_counts[key] += 1
+        else:
+            rows_without_dedupe_key += 1
         existing_contract = existing_by_key.get(key) if key else None
 
         if existing_contract is not None:
+            rows_matched_existing += 1
             existing_contract.source_file_name = session.original_file_name
             existing_contract.source_row_number = row_index
             existing_contract.contract_number = normalized_payload.get("contract_number")
@@ -547,6 +577,7 @@ async def confirm_mapping_and_import(
                     }
                 )
         else:
+            rows_created_new += 1
             contract = Contract(
                 owner_user_id=session.owner_user_id,
                 source_file_name=session.original_file_name,
@@ -611,6 +642,33 @@ async def confirm_mapping_and_import(
     session.imported_rows = len(contracts_to_create) + len(contracts_to_update)
     session.status = ImportStatus.failed if session.imported_rows == 0 else ImportStatus.completed
     session.completed_at = datetime.utcnow()
+
+    dedupe_collision_summary: dict[str, dict[str, int]] = {}
+    dedupe_types = sorted({dedupe_key[0] for dedupe_key in dedupe_key_counts})
+    for dedupe_type in dedupe_types:
+        group_sizes = [count for (key_type, _), count in dedupe_key_counts.items() if key_type == dedupe_type]
+        repeated_groups = [count for count in group_sizes if count > 1]
+        dedupe_collision_summary[dedupe_type] = {
+            "unique_keys": len(group_sizes),
+            "repeated_keys": len(repeated_groups),
+            "rows_in_repeated_keys": int(sum(repeated_groups)),
+            "max_group_size": int(max(repeated_groups) if repeated_groups else 0),
+        }
+    logger.info(
+        "import_confirm_summary session_id=%s file_name=%s total_rows=%d valid_rows=%d invalid_rows=%d imported_rows=%d created=%d updated=%d rows_without_dedupe_key=%d llm_repairs_used=%d validation_top=%s dedupe_collisions=%s",
+        session.id,
+        session.original_file_name,
+        session.total_rows,
+        session.valid_rows,
+        session.invalid_rows,
+        session.imported_rows,
+        rows_created_new,
+        rows_matched_existing,
+        rows_without_dedupe_key,
+        llm_repairs_used,
+        dict(validation_reason_counts.most_common(8)),
+        dedupe_collision_summary,
+    )
 
     await db.flush()
     if contracts_to_create:
