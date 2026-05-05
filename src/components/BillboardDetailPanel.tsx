@@ -204,7 +204,7 @@ export function BillboardDetailPanel({ billboard, open, onOpenChange, variant = 
   if (variant === "dialog") {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-xl">
+        <DialogContent className="z-[1200] max-h-[90vh] overflow-y-auto p-0 sm:max-w-xl">
           <DialogHeader className="sr-only">
             <DialogTitle>{billboard.code}</DialogTitle>
           </DialogHeader>
