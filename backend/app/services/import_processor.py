@@ -277,11 +277,11 @@ def _dedupe_key(normalized_payload: dict[str, Any]) -> tuple[str, str] | None:
     expiry = _norm_key(normalized_payload.get("expiry_date"))
     if advertiser and city and address and expiry:
         return ("composite_v1", f"{advertiser}|{city}|{address}|{expiry}")
+    if city and address and expiry:
+        return ("location_expiry_v1", f"{city}|{address}|{expiry}")
     asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
-    if asset_name and city:
-        return ("asset_city", f"{asset_name}|{city}")
-    if asset_name and address:
-        return ("asset_address", f"{asset_name}|{address}")
+    if asset_name and city and address:
+        return ("asset_location_v1", f"{asset_name}|{city}|{address}")
     return None
 
 
@@ -299,10 +299,16 @@ def _all_match_keys(normalized_payload: dict[str, Any]) -> list[tuple[str, str]]
     asset_name = _normalize_text_for_key(normalized_payload.get("asset_name"))
     city = _normalize_text_for_key(normalized_payload.get("city"))
     address = _normalize_address_for_key(normalized_payload.get("location_address"))
-    if asset_name and city and ("asset_city", f"{asset_name}|{city}") not in keys:
-        keys.append(("asset_city", f"{asset_name}|{city}"))
-    if asset_name and address and ("asset_address", f"{asset_name}|{address}") not in keys:
-        keys.append(("asset_address", f"{asset_name}|{address}"))
+    if city and address:
+        expiry = _normalize_text_for_key(normalized_payload.get("expiry_date"))
+        if expiry:
+            location_expiry = ("location_expiry_v1", f"{city}|{address}|{expiry}")
+            if location_expiry not in keys:
+                keys.append(location_expiry)
+    if asset_name and city and address:
+        asset_location = ("asset_location_v1", f"{asset_name}|{city}|{address}")
+        if asset_location not in keys:
+            keys.append(asset_location)
     advertiser = _normalize_text_for_key(normalized_payload.get("advertiser_name"))
     expiry = _normalize_text_for_key(normalized_payload.get("expiry_date"))
     if advertiser and city and address and expiry:

@@ -575,6 +575,35 @@ def test_reimport_keeps_photo_with_asset_name_matching() -> None:
         assert items_after[0]["id"] == contract_id
         assert items_after[0]["asset_name"] == "Autobus Ełk"
 
+
+def test_import_without_strong_keys_does_not_merge_multiple_rows() -> None:
+    csv_many_rows = (
+        "Najemca,Miasto,Adres,Data_wygasniecia,Nazwa nośnika\n"
+        "Klient 01,Ełk,Adres 01,2026-12-31,\n"
+        "Klient 02,Ełk,Adres 02,2026-12-31,\n"
+        "Klient 03,Ełk,Adres 03,2026-12-31,\n"
+        "Klient 04,Ełk,Adres 04,2026-12-31,\n"
+        "Klient 05,Ełk,Adres 05,2026-12-31,\n"
+    ).encode("utf-8")
+    with TestClient(app) as client:
+        client.get("/health")
+        result = _run_import(client, csv_many_rows)
+        assert result["status"] == "completed"
+        assert result["imported_rows"] == 5
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        items = listed.json()["items"]
+        assert len(items) == 5
+        assert {item["advertiser_name"] for item in items} == {
+            "Klient 01",
+            "Klient 02",
+            "Klient 03",
+            "Klient 04",
+            "Klient 05",
+        }
+
+
 def test_to_json_safe_replaces_nan_and_inf_with_null() -> None:
     payload = {
         "plain_nan": float("nan"),
