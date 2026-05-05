@@ -388,9 +388,10 @@ function AppPage() {
     }
   };
 
-  // Empty-state onboarding screen — shown when the user has no data.
-  // Demo mode never lands here because demo injects mock data.
-  if (ready && contracts.length === 0) {
+  // Empty-state onboarding screen — shown only when the portfolio has no data.
+  // Do not use filtered rows here, otherwise a search from another screen may
+  // incorrectly look like an empty portfolio.
+  if (ready && dashboardRows.length === 0) {
     return (
       <AppShell title="Witaj w BillboardHub" subtitle="Zacznij od zaimportowania portfela">
         <OnboardingScreen />
