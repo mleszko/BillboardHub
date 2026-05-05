@@ -104,12 +104,16 @@ def _extract_google_coords_from_url(url: str) -> tuple[float, float] | None:
     return None
 
 
-def _resolve_maps_app_shortlink(gps_link: str) -> tuple[float, float] | None:
-    settings = get_settings()
+def _is_maps_app_shortlink(gps_link: str) -> bool:
     parsed = urlparse(gps_link.strip())
     if parsed.scheme not in {"http", "https"}:
-        return None
-    if parsed.netloc.lower() not in _MAPS_APP_HOSTS:
+        return False
+    return parsed.netloc.lower() in _MAPS_APP_HOSTS
+
+
+def _resolve_maps_app_shortlink(gps_link: str) -> tuple[float, float] | None:
+    settings = get_settings()
+    if not _is_maps_app_shortlink(gps_link):
         return None
     try:
         with urlopen(gps_link, timeout=settings.maps_link_resolve_timeout_seconds) as resp:  # noqa: S310
@@ -482,6 +486,7 @@ async def confirm_mapping_and_import(
     invalid_rows = 0
     llm_repairs_used = 0
     llm_repair_limit = 25
+    gps_resolution_cache: dict[str, tuple[float, float] | None] = {}
     existing_contracts = (
         await db.execute(select(Contract).where(Contract.owner_user_id == payload.owner_user_id))
     ).scalars().all()
@@ -529,17 +534,22 @@ async def confirm_mapping_and_import(
 
         gps_link = normalized_payload.get("gps_coordinates")
         if gps_link:
-            resolved = _resolve_maps_app_shortlink(str(gps_link))
-            if resolved is None:
+            gps_link_str = str(gps_link).strip()
+            normalized_payload["gps_coordinates"] = gps_link_str
+            if not _is_maps_app_shortlink(gps_link_str):
                 validation_errors.append(
                     {
                         "field": "gps_coordinates",
-                        "reason": "Koordynaty GPS muszą być linkiem maps.app.goo.gl z możliwymi do odczytu współrzędnymi.",
+                        "reason": "Koordynaty GPS muszą być linkiem maps.app.goo.gl.",
                     }
                 )
             else:
-                normalized_payload["latitude"] = Decimal(str(resolved[0]))
-                normalized_payload["longitude"] = Decimal(str(resolved[1]))
+                if gps_link_str not in gps_resolution_cache:
+                    gps_resolution_cache[gps_link_str] = _resolve_maps_app_shortlink(gps_link_str)
+                resolved = gps_resolution_cache[gps_link_str]
+                if resolved is not None:
+                    normalized_payload["latitude"] = Decimal(str(resolved[0]))
+                    normalized_payload["longitude"] = Decimal(str(resolved[1]))
 
         if is_probable_summary_raw_row(raw_row):
             validation_errors.append(
