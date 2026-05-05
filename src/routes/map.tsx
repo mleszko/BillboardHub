@@ -59,13 +59,6 @@ const API_BASE_URL =
   (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:8000";
 
-const mapPhotos = [
-  "https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=800&q=70",
-  "https://images.unsplash.com/photo-1568430462989-44163eb1752f?auto=format&fit=crop&w=800&q=70",
-  "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=70",
-  "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=800&q=70",
-];
-
 const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
   bialystok: { lat: 53.1325, lng: 23.1688 },
   białystok: { lat: 53.1325, lng: 23.1688 },
@@ -223,7 +216,7 @@ function MapPage() {
   const mapRows = useMemo<Billboard[]>(() => {
     if (demo) return billboards;
     return backendRows
-      .map((item, idx) => {
+      .map((item) => {
         const type = mapBillboardType(item.billboard_type);
         const hasExact = Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
         const approx = !hasExact ? fallbackCoords(item) : null;
@@ -249,7 +242,7 @@ function MapPage() {
           contractStart: item.start_date || undefined,
           contractEnd: item.expiry_unknown ? undefined : item.expiry_date,
           expiryUnknown: Boolean(item.expiry_unknown),
-          creativePhoto: item.photo_url || mapPhotos[idx % mapPhotos.length],
+          creativePhoto: item.photo_url?.trim() || "",
           dailyImpressions: estimateImpressions(type),
         };
       })
