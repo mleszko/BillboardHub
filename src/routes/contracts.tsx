@@ -195,12 +195,16 @@ function ContractDetailDialog({
   onOpenChange,
   canEdit,
   onEditRequest,
+  onDeletePhoto,
+  deletingPhoto,
 }: {
   row: ContractRow | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   canEdit?: boolean;
   onEditRequest?: () => void;
+  onDeletePhoto?: () => void;
+  deletingPhoto?: boolean;
 }) {
   if (!row) return null;
   const months = row.expiryUnknown ? 0 : billingMonthsCount(row.contractStart, row.contractEnd);
@@ -302,6 +306,19 @@ function ContractDetailDialog({
                 alt={`Zdjęcie billboardu ${row.code}`}
                 className="max-h-56 rounded-md border object-cover"
               />
+              {onDeletePhoto ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={onDeletePhoto}
+                  disabled={deletingPhoto}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {deletingPhoto ? "Usuwanie zdjęcia..." : "Usuń zdjęcie"}
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
@@ -377,6 +394,7 @@ function ContractsPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deleteAllBusy, setDeleteAllBusy] = useState(false);
+  const [deletePhotoBusy, setDeletePhotoBusy] = useState(false);
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
   const [contractDialogMode, setContractDialogMode] = useState<"create" | "edit">("create");
   const [contractDialogInitial, setContractDialogInitial] = useState<ContractFormValues | null>(
@@ -528,6 +546,28 @@ function ContractsPage() {
       setDeleteAllBusy(false);
     }
   }, [demo, reloadBackendRows]);
+
+  const deletePhotoFromContract = useCallback(async () => {
+    if (demo || !detailRow || !detailRow.photoUrl) return;
+    setDeletePhotoBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts/${detailRow.id}/photo`, {
+        method: "DELETE",
+        headers: await getBackendAuthHeaders(),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Nie udało się usunąć zdjęcia.");
+      }
+      toast.success("Zdjęcie zostało usunięte.");
+      setDetailRow((current) => (current ? { ...current, photoUrl: null } : null));
+      await reloadBackendRows();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Błąd usuwania zdjęcia.");
+    } finally {
+      setDeletePhotoBusy(false);
+    }
+  }, [demo, detailRow, reloadBackendRows]);
 
   const openNewContract = () => {
     setContractDialogMode("create");
@@ -771,6 +811,10 @@ function ContractsPage() {
           }}
           canEdit={detailRow != null && rowIsEditable(detailRow)}
           onEditRequest={detailRow ? () => openEditContract(detailRow) : undefined}
+          onDeletePhoto={
+            !demo && detailRow?.photoUrl ? () => void deletePhotoFromContract() : undefined
+          }
+          deletingPhoto={deletePhotoBusy}
         />
 
         <ContractFormDialog

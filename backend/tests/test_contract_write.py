@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 from app.constants import PLACEHOLDER_CONTRACT_EXPIRY
@@ -86,3 +88,77 @@ def test_delete_all_contracts_only_for_current_user() -> None:
         list_b = client.get("/contracts", headers=user_b)
         assert list_b.status_code == 200, list_b.text
         assert len(list_b.json()["items"]) == 1
+
+
+def test_delete_contract_photo_removes_file_from_storage(monkeypatch) -> None:
+    removed_paths: list[str] = []
+    uploaded_paths: list[str] = []
+
+    class FakeBucket:
+        def upload(self, path: str, raw: bytes, options: dict[str, str]) -> None:
+            assert raw
+            assert options.get("content-type") == "image/png"
+            uploaded_paths.append(path)
+
+        def remove(self, paths: list[str]) -> None:
+            removed_paths.extend(paths)
+
+        def get_public_url(self, path: str) -> str:
+            return f"https://storage.local/{path}"
+
+        def create_signed_url(self, path: str, expires_in: int) -> dict[str, str]:
+            assert expires_in > 0
+            return {"signedURL": f"https://storage.local/signed/{path}"}
+
+    class FakeStorage:
+        def __init__(self) -> None:
+            self.bucket = FakeBucket()
+
+        def from_(self, bucket_name: str) -> FakeBucket:
+            assert bucket_name == "contract-photos"
+            return self.bucket
+
+    class FakeSupabaseClient:
+        def __init__(self) -> None:
+            self.storage = FakeStorage()
+
+    monkeypatch.setattr("app.api.routes.contracts.create_client", lambda _url, _key: FakeSupabaseClient())
+    monkeypatch.setattr(
+        "app.api.routes.contracts.get_settings",
+        lambda: SimpleNamespace(
+            supabase_url="https://supabase.local",
+            supabase_service_role_key="service-role",
+            contract_photo_bucket="contract-photos",
+            contract_photo_max_bytes=2_000_000,
+            contract_photo_max_dimension_px=1600,
+        ),
+    )
+
+    with TestClient(app) as client:
+        client.get("/health")
+        created = client.post(
+            "/contracts",
+            headers=_DEV_HEADERS,
+            json={"advertiser_name": "Photo Test", "expiry_unknown": True},
+        )
+        assert created.status_code == 201, created.text
+        contract_id = created.json()["id"]
+
+        uploaded = client.post(
+            f"/contracts/{contract_id}/photo",
+            headers=_DEV_HEADERS,
+            files={"photo": ("photo.png", b"\x89PNG\r\n\x1a\nfake", "image/png")},
+            data={"width": "120", "height": "80"},
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        assert uploaded_paths, "Upload should write photo path."
+
+        deleted = client.delete(f"/contracts/{contract_id}/photo", headers=_DEV_HEADERS)
+        assert deleted.status_code == 204, deleted.text
+        assert removed_paths == [uploaded_paths[-1]]
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        row = next((item for item in listed.json()["items"] if item["id"] == contract_id), None)
+        assert row is not None
+        assert row["photo_url"] is None
