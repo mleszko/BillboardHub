@@ -50,13 +50,13 @@ class Settings(BaseSettings):
     maps_link_resolve_timeout_seconds: float = Field(
         default=5.0, validation_alias="MAPS_LINK_RESOLVE_TIMEOUT_SECONDS"
     )
-    contract_photo_max_bytes: int = Field(default=2_000_000, validation_alias="CONTRACT_PHOTO_MAX_BYTES")
+    contract_photo_max_bytes: int = Field(default=700_000, validation_alias="CONTRACT_PHOTO_MAX_BYTES")
     contract_photo_bucket: str = Field(
         default="contract-photos",
         validation_alias=AliasChoices("CONTRACT_PHOTO_BUCKET", "SUPABASE_STORAGE_BUCKET"),
     )
     contract_photo_max_dimension_px: int = Field(
-        default=1600, validation_alias="CONTRACT_PHOTO_MAX_DIMENSION_PX"
+        default=1280, validation_alias="CONTRACT_PHOTO_MAX_DIMENSION_PX"
     )
 
     model_config = SettingsConfigDict(

@@ -25,8 +25,9 @@ import type { Billboard, ContractStatus } from "@/lib/mock-data";
 
 const DEFAULT_PHOTO =
   "https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=800&q=70";
-const MAX_PHOTO_BYTES = 2_000_000;
-const MAX_PHOTO_DIMENSION_PX = 1600;
+const MAX_PHOTO_BYTES = 700_000;
+const MAX_PHOTO_DIMENSION_PX = 1280;
+const PHOTO_SOURCE_SOFT_LIMIT_BYTES = 12_000_000;
 
 export type ContractFormValues = {
   id?: string;
@@ -211,6 +212,99 @@ async function readImageDimensions(file: File): Promise<{ width: number; height:
   }
 }
 
+async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Nie udało się odczytać zdjęcia."));
+      img.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function getScaledDimensions(
+  width: number,
+  height: number,
+  maxDimensionPx: number,
+): { width: number; height: number } {
+  const maxCurrent = Math.max(width, height);
+  if (maxCurrent <= maxDimensionPx) {
+    return { width, height };
+  }
+  const scale = maxDimensionPx / maxCurrent;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+async function canvasToWebpBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Nie udało się skompresować zdjęcia."));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/webp",
+      quality,
+    );
+  });
+}
+
+async function optimizePhotoForUpload(
+  source: File,
+  maxBytes: number,
+  maxDimensionPx: number,
+): Promise<{ optimizedFile: File; width: number; height: number }> {
+  const image = await loadImageFromFile(source);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Przeglądarka nie wspiera kompresji zdjęć.");
+  }
+
+  const initialDims = getScaledDimensions(image.naturalWidth, image.naturalHeight, maxDimensionPx);
+  let targetWidth = initialDims.width;
+  let targetHeight = initialDims.height;
+  const qualities = [0.82, 0.72, 0.62, 0.54, 0.46, 0.38];
+
+  for (let resizeStep = 0; resizeStep < 5; resizeStep += 1) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    context.clearRect(0, 0, targetWidth, targetHeight);
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+    for (const quality of qualities) {
+      const blob = await canvasToWebpBlob(canvas, quality);
+      if (blob.size <= maxBytes) {
+        return {
+          optimizedFile: new File([blob], "billboard-photo.webp", {
+            type: "image/webp",
+          }),
+          width: targetWidth,
+          height: targetHeight,
+        };
+      }
+    }
+
+    targetWidth = Math.max(1, Math.round(targetWidth * 0.85));
+    targetHeight = Math.max(1, Math.round(targetHeight * 0.85));
+  }
+
+  throw new Error(
+    `Nie udało się zmniejszyć zdjęcia do ${Math.round(
+      maxBytes / 1000,
+    )}KB. Wybierz lżejsze zdjęcie (np. zrzut zamiast pełnej fotografii).`,
+  );
+}
+
 function buildApiCreatePayload(form: ContractFormValues) {
   const monthlyRaw = form.monthly_rent_net.trim().replace(",", ".");
   return {
@@ -379,17 +473,19 @@ export function ContractFormDialog({
       }
 
       if (selectedPhotoFile && contractId) {
-        if (selectedPhotoFile.size > MAX_PHOTO_BYTES) {
-          throw new Error(`Zdjęcie przekracza limit ${Math.round(MAX_PHOTO_BYTES / 1_000_000)}MB.`);
+        if (selectedPhotoFile.size > PHOTO_SOURCE_SOFT_LIMIT_BYTES) {
+          throw new Error("Źródłowe zdjęcie jest zbyt duże. Użyj pliku do 12MB.");
         }
-        const { width, height } = await readImageDimensions(selectedPhotoFile);
-        if (width > MAX_PHOTO_DIMENSION_PX || height > MAX_PHOTO_DIMENSION_PX) {
-          throw new Error(`Maksymalny wymiar zdjęcia to ${MAX_PHOTO_DIMENSION_PX}px.`);
-        }
+        const { optimizedFile, width, height } = await optimizePhotoForUpload(
+          selectedPhotoFile,
+          MAX_PHOTO_BYTES,
+          MAX_PHOTO_DIMENSION_PX,
+        );
+        const finalDims = await readImageDimensions(optimizedFile);
         const data = new FormData();
-        data.append("photo", selectedPhotoFile);
-        data.append("width", String(width));
-        data.append("height", String(height));
+        data.append("photo", optimizedFile);
+        data.append("width", String(finalDims.width || width));
+        data.append("height", String(finalDims.height || height));
         const res = await fetch(`${apiBaseUrl}/contracts/${contractId}/photo`, {
           method: "POST",
           headers: await getBackendAuthHeaders(),
@@ -630,7 +726,8 @@ export function ContractFormDialog({
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Max {Math.round(MAX_PHOTO_BYTES / 1_000_000)}MB, maks. {MAX_PHOTO_DIMENSION_PX}px.
+              Auto-optymalizacja do ok. {Math.round(MAX_PHOTO_BYTES / 1000)}KB, maks.{" "}
+              {MAX_PHOTO_DIMENSION_PX}px.
             </p>
             {selectedPhotoPreviewUrl ? (
               <img
