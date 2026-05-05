@@ -604,6 +604,26 @@ def test_import_without_strong_keys_does_not_merge_multiple_rows() -> None:
         }
 
 
+def test_import_does_not_merge_rows_when_location_and_expiry_repeat() -> None:
+    repeated_location_csv = (
+        "Najemca,Miasto,Adres,Data_wygasniecia,Nazwa nośnika\n"
+        "Klient A,Ełk,Autobus mobilny,2026-12-31,\n"
+        "Klient B,Ełk,Autobus mobilny,2026-12-31,\n"
+        "Klient C,Ełk,Autobus mobilny,2026-12-31,\n"
+    ).encode("utf-8")
+    with TestClient(app) as client:
+        client.get("/health")
+        result = _run_import(client, repeated_location_csv)
+        assert result["status"] == "completed"
+        assert result["imported_rows"] == 3
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        items = listed.json()["items"]
+        assert len(items) == 3
+        assert {item["advertiser_name"] for item in items} == {"Klient A", "Klient B", "Klient C"}
+
+
 def test_to_json_safe_replaces_nan_and_inf_with_null() -> None:
     payload = {
         "plain_nan": float("nan"),

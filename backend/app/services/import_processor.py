@@ -336,11 +336,28 @@ def _encode_match_key(key: tuple[str, str]) -> str:
 
 
 def _register_contract_match_keys(
-    existing_by_key: dict[tuple[str, str], Contract],
+    existing_by_key: dict[tuple[str, str], list[Contract]],
     contract: Contract,
 ) -> None:
     for match_key in _contract_match_keys(contract):
-        existing_by_key[match_key] = contract
+        bucket = existing_by_key.setdefault(match_key, [])
+        if any(item.id == contract.id for item in bucket):
+            continue
+        bucket.append(contract)
+
+
+def _pick_matching_existing_contract(
+    *,
+    existing_by_key: dict[tuple[str, str], list[Contract]],
+    row_match_keys: list[tuple[str, str]],
+    used_existing_contract_ids: set[str],
+) -> Contract | None:
+    for match_key in row_match_keys:
+        for candidate in existing_by_key.get(match_key, []):
+            if candidate.id in used_existing_contract_ids:
+                continue
+            return candidate
+    return None
 
 
 async def apply_source_of_truth_contract_sync(
@@ -474,7 +491,8 @@ async def confirm_mapping_and_import(
     existing_contracts = (
         await db.execute(select(Contract).where(Contract.owner_user_id == payload.owner_user_id))
     ).scalars().all()
-    existing_by_key: dict[tuple[str, str], Contract] = {}
+    existing_by_key: dict[tuple[str, str], list[Contract]] = {}
+    used_existing_contract_ids: set[str] = set()
     for contract in existing_contracts:
         _register_contract_match_keys(existing_by_key, contract)
     contract_ids_to_keep = preserve_contract_ids if preserve_contract_ids is not None else set()
@@ -579,9 +597,10 @@ async def confirm_mapping_and_import(
 
         valid_rows += 1
         row_match_keys = _all_match_keys(normalized_payload)
-        existing_contract = next(
-            (existing_by_key[match_key] for match_key in row_match_keys if match_key in existing_by_key),
-            None,
+        existing_contract = _pick_matching_existing_contract(
+            existing_by_key=existing_by_key,
+            row_match_keys=row_match_keys,
+            used_existing_contract_ids=used_existing_contract_ids,
         )
 
         if existing_contract is not None:
@@ -624,6 +643,7 @@ async def confirm_mapping_and_import(
             existing_contract.notes = normalized_payload.get("notes")
             existing_contract.gps_coordinates_raw = normalized_payload.get("gps_coordinates")
             contracts_to_update.append(existing_contract)
+            used_existing_contract_ids.add(existing_contract.id)
             contract_ids_to_keep.add(existing_contract.id)
             _register_contract_match_keys(existing_by_key, existing_contract)
             if advertiser_fallback_applied and len(invalid_preview) < 10:
