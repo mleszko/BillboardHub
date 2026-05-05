@@ -315,7 +315,12 @@ function MapPage() {
           <Stat label="Krytyczne" value={criticalCount.toString()} tone="destructive" />
         </Card>
 
-        <BillboardDetailPanel billboard={selected} open={open} onOpenChange={setOpen} />
+        <BillboardDetailPanel
+          billboard={selected}
+          open={open}
+          onOpenChange={setOpen}
+          variant="dialog"
+        />
       </div>
     </AppShell>
   );
