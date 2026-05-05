@@ -507,7 +507,9 @@ async def confirm_mapping_and_import(
     used_existing_contract_ids: set[str] = set()
     for contract in existing_contracts:
         _register_contract_match_keys(existing_by_key, contract)
-    contract_ids_to_keep = set(preserve_contract_ids or set())
+    # In batch imports this must mutate the shared set passed from the caller,
+    # otherwise final source-of-truth sync can delete freshly imported rows.
+    contract_ids_to_keep = preserve_contract_ids if preserve_contract_ids is not None else set()
 
     mapped_target_fields = sorted(set(mapped_columns.values()))
     logger.info(

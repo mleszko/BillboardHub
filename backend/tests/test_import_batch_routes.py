@@ -151,4 +151,10 @@ def test_confirm_mapping_batch_aggregates_results(monkeypatch) -> None:
     assert payload["imported_rows"] == 2
     assert payload["total_rows"] == 2
     assert len(payload["sheets"]) == 2
+    listed = client.get(
+        "/contracts",
+        headers={"x-dev-user-id": "user-batch-2", "x-dev-user-email": "batch2@example.com"},
+    )
+    assert listed.status_code == 200
+    assert len(listed.json()["items"]) == 2
     app.dependency_overrides.clear()
