@@ -70,11 +70,34 @@ const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
   białystok: { lat: 53.1325, lng: 23.1688 },
   suwalki: { lat: 54.1118, lng: 22.9309 },
   suwałki: { lat: 54.1118, lng: 22.9309 },
+  elk: { lat: 53.8281, lng: 22.3646 },
+  ełk: { lat: 53.8281, lng: 22.3646 },
   lomza: { lat: 53.1781, lng: 22.0594 },
   łomża: { lat: 53.1781, lng: 22.0594 },
   augustow: { lat: 53.8445, lng: 22.9798 },
   augustów: { lat: 53.8445, lng: 22.9798 },
 };
+
+type AddressFallbackRule = {
+  city: string;
+  tokens: string[];
+  coords: { lat: number; lng: number };
+};
+
+const ADDRESS_FALLBACK_RULES: AddressFallbackRule[] = [
+  // Ruchomy nośnik "Autobus w Ełku" — pokazuj w centrum rynku.
+  {
+    city: "elk",
+    tokens: ["autobus", "elku"],
+    coords: { lat: 53.8281, lng: 22.3646 },
+  },
+  // Ruchomy nośnik "przyczepka Okulickiego".
+  {
+    city: "elk",
+    tokens: ["okulickiego"],
+    coords: { lat: 53.8206, lng: 22.3509 },
+  },
+];
 
 function statusFromBackend(
   contractStatus: string,
@@ -119,8 +142,25 @@ function hash01(value: string): number {
   return (Math.abs(hash) % 1000) / 1000;
 }
 
+function normalizeForMatch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function fallbackCoords(item: BackendContract): { lat: number; lng: number } | null {
-  const rawCity = (item.city || "").trim().toLowerCase();
+  const rawCity = normalizeForMatch(item.city || "");
+  const rawAddress = normalizeForMatch(item.location_address || "");
+
+  for (const rule of ADDRESS_FALLBACK_RULES) {
+    if (rule.city !== rawCity) continue;
+    if (rule.tokens.every((token) => rawAddress.includes(token))) {
+      return rule.coords;
+    }
+  }
+
   const center = CITY_CENTERS[rawCity];
   if (!center) return null;
   const seed = `${item.id}:${item.location_address || ""}:${item.contract_number || ""}`;
