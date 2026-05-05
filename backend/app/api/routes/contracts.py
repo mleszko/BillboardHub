@@ -34,6 +34,7 @@ def _contract_to_dict(
         "id": contract.id,
         "contract_number": contract.contract_number,
         "billboard_code": contract.billboard_code,
+        "asset_name": contract.asset_name,
         "billboard_type": contract.billboard_type.value if contract.billboard_type else None,
         "advertiser_name": contract.advertiser_name,
         "investment_name": contract.investment_name,
@@ -194,6 +195,7 @@ async def create_contract(
         advertiser_name=body.advertiser_name.strip(),
         contract_number=body.contract_number.strip() if body.contract_number else None,
         billboard_code=body.billboard_code.strip() if body.billboard_code else None,
+        asset_name=body.asset_name.strip() if body.asset_name else None,
         billboard_type=_coerce_billboard_type(body.billboard_type),
         investment_name=body.investment_name.strip() if body.investment_name else None,
         city=body.city.strip() if body.city else None,
@@ -241,6 +243,9 @@ async def update_contract(
     if "billboard_code" in updates:
         v = updates["billboard_code"]
         contract.billboard_code = v.strip() if v else None
+    if "asset_name" in updates:
+        v = updates["asset_name"]
+        contract.asset_name = v.strip() if v else None
     if "billboard_type" in updates:
         contract.billboard_type = _coerce_billboard_type(updates["billboard_type"])
     if "investment_name" in updates:

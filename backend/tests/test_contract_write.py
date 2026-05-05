@@ -26,6 +26,7 @@ def test_create_and_patch_contract() -> None:
             json={
                 "advertiser_name": "  Sklep  ",
                 "billboard_code": "SUW-99",
+                "asset_name": "  u matematyka  ",
                 "investment_name": "  Modernizacja peronu  ",
                 "city": "Miasto testowe",
                 "gps_coordinates_raw": "https://maps.app.goo.gl/nDxi3L4cLSowfZK37",
@@ -38,6 +39,7 @@ def test_create_and_patch_contract() -> None:
         body = create.json()
         assert body["advertiser_name"] == "Sklep"
         assert body["billboard_code"] == "SUW-99"
+        assert body["asset_name"] == "u matematyka"
         assert body["investment_name"] == "Modernizacja peronu"
         assert body["gps_coordinates_raw"] == "https://maps.app.goo.gl/nDxi3L4cLSowfZK37"
         assert body["notes"] == "Uwagi testowe"
@@ -50,6 +52,7 @@ def test_create_and_patch_contract() -> None:
             headers=_DEV_HEADERS,
             json={
                 "advertiser_name": "Inny klient",
+                "asset_name": "przy mrowce",
                 "investment_name": "Nowa inwestycja",
                 "gps_coordinates_raw": "https://maps.app.goo.gl/nDxi3L4cLSowfZK37",
                 "notes": "Notatka po edycji",
@@ -60,6 +63,7 @@ def test_create_and_patch_contract() -> None:
         assert patch.status_code == 200, patch.text
         updated = patch.json()
         assert updated["advertiser_name"] == "Inny klient"
+        assert updated["asset_name"] == "przy mrowce"
         assert updated["investment_name"] == "Nowa inwestycja"
         assert updated["gps_coordinates_raw"] == "https://maps.app.goo.gl/nDxi3L4cLSowfZK37"
         assert updated["notes"] == "Notatka po edycji"
