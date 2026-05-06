@@ -82,6 +82,7 @@ DEFAULT_HEADER_HINTS: dict[str, list[tuple[str, float]]] = {
     "uwagi_do_platnosci": [("notes", 0.86)],
     "uwagi_dot_platnosci": [("notes", 0.86)],
     "inwestycja": [("investment_name", 0.94)],
+    "wspolrzedne_gps": [("gps_coordinates", 0.99)],
     "koordynaty_gps": [("gps_coordinates", 0.96)],
     "gps": [("gps_coordinates", 0.94)],
     "link_google_maps": [("gps_coordinates", 0.9)],
