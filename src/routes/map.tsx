@@ -48,6 +48,7 @@ type BackendContract = {
   expiry_unknown?: boolean;
   contract_status: string;
   monthly_rent_net: number | null;
+  gps_coordinates_raw?: string | null;
   photo_url?: string | null;
 };
 
@@ -144,6 +145,19 @@ function normalizeForMatch(value: string): string {
     .trim();
 }
 
+function parseGpsCoordinatePair(
+  raw: string | null | undefined,
+): { lat: number; lng: number } | null {
+  if (!raw) return null;
+  const match = raw.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
 function fallbackCoords(item: BackendContract): { lat: number; lng: number } | null {
   const rawCity = normalizeForMatch(item.city || "");
   const rawAddress = normalizeForMatch(item.location_address || "");
@@ -218,10 +232,13 @@ function MapPage() {
     return backendRows
       .map((item) => {
         const type = mapBillboardType(item.billboard_type);
-        const hasExact = Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
-        const approx = !hasExact ? fallbackCoords(item) : null;
-        const lat = hasExact ? Number(item.latitude) : approx?.lat;
-        const lng = hasExact ? Number(item.longitude) : approx?.lng;
+        const exactLat = Number(item.latitude);
+        const exactLng = Number(item.longitude);
+        const hasExact = Number.isFinite(exactLat) && Number.isFinite(exactLng);
+        const fromRaw = !hasExact ? parseGpsCoordinatePair(item.gps_coordinates_raw) : null;
+        const approx = !hasExact && !fromRaw ? fallbackCoords(item) : null;
+        const lat = hasExact ? exactLat : (fromRaw?.lat ?? approx?.lat);
+        const lng = hasExact ? exactLng : (fromRaw?.lng ?? approx?.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
         return {
           id: item.id,
