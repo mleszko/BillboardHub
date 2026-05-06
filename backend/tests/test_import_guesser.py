@@ -41,3 +41,9 @@ def test_total_contract_value_header_variant_maps_to_total_contract_value_net() 
     proposals = heuristic_mapping_proposals(["koszt za cały okres trwania umowy"])
     assert proposals
     assert proposals[0].target_field_name == "total_contract_value_net"
+
+
+def test_wspolrzedne_gps_header_maps_to_gps_coordinates() -> None:
+    proposals = heuristic_mapping_proposals(["WSPÓŁRZĘDNE GPS"])
+    assert proposals
+    assert proposals[0].target_field_name == "gps_coordinates"

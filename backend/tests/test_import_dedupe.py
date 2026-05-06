@@ -690,6 +690,67 @@ def test_import_accepts_unresolved_valid_maps_shortlinks(monkeypatch: object) ->
         assert {item["advertiser_name"] for item in items} == {"Klient GPS 1", "Klient GPS 2"}
 
 
+def test_import_parses_direct_gps_coordinate_pairs() -> None:
+    csv_with_gps_pairs = (
+        "Najemca,Miasto,Adres,Data_wygasniecia,WSPÓŁRZĘDNE GPS\n"
+        "Klient GP 1,Ełk,Ulica 1,2026-12-31,\"54.332756, 18.567468\"\n"
+        "Klient GP 2,Ełk,Ulica 2,2026-12-31,\"53.123456, 22.765432\"\n"
+    ).encode("utf-8")
+
+    with TestClient(app) as client:
+        client.get("/health")
+        guess = client.post(
+            "/imports/guess-mapping",
+            headers=_DEV_HEADERS,
+            files={"file": ("gps_pairs.csv", csv_with_gps_pairs, "text/csv")},
+            data={
+                "sheet_name": "",
+                "header_row_1based": "0",
+                "skip_rows_before_header": "0",
+                "unpivot_month_columns": "false",
+                "monthly_aggregate": "mean",
+            },
+        )
+        assert guess.status_code == 200, guess.text
+        proposal = guess.json()
+        payload = {
+            "session_id": proposal["session_id"],
+            "owner_user_id": proposal["owner_user_id"],
+            "mapping": [
+                {
+                    "source_column_name": m["source_column_name"],
+                    "target_field_name": (
+                        "gps_coordinates"
+                        if m["source_column_name"] == "WSPÓŁRZĘDNE GPS"
+                        else m["target_field_name"]
+                    ),
+                    "confirmed_by_user": True,
+                    "user_override": m["source_column_name"] == "WSPÓŁRZĘDNE GPS",
+                    "transform_hint": m.get("transform_hint"),
+                }
+                for m in proposal["mapping_suggestions"]
+            ],
+        }
+        confirm = client.post("/imports/confirm-mapping", headers=_DEV_HEADERS, json=payload)
+        assert confirm.status_code == 200, confirm.text
+        result = confirm.json()
+        assert result["status"] == "completed"
+        assert result["imported_rows"] == 2
+        assert result["invalid_rows"] == 0
+
+        listed = client.get("/contracts", headers=_DEV_HEADERS)
+        assert listed.status_code == 200, listed.text
+        rows = [item for item in listed.json()["items"] if item["advertiser_name"] in {"Klient GP 1", "Klient GP 2"}]
+        assert len(rows) == 2
+        by_name = {item["advertiser_name"]: item for item in rows}
+        assert by_name["Klient GP 1"]["gps_coordinates_raw"] == "54.332756, 18.567468"
+        assert by_name["Klient GP 2"]["gps_coordinates_raw"] == "53.123456, 22.765432"
+        assert abs(float(by_name["Klient GP 1"]["latitude"]) - 54.332756) < 1e-6
+        assert abs(float(by_name["Klient GP 1"]["longitude"]) - 18.567468) < 1e-6
+        assert abs(float(by_name["Klient GP 2"]["latitude"]) - 53.123456) < 1e-6
+        assert abs(float(by_name["Klient GP 2"]["longitude"]) - 22.765432) < 1e-6
+
+
 def test_to_json_safe_replaces_nan_and_inf_with_null() -> None:
     payload = {
         "plain_nan": float("nan"),
