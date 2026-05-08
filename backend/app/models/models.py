@@ -91,6 +91,7 @@ class Contract(Base):
     property_owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     billboard_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     asset_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     billboard_type: Mapped[BillboardType] = mapped_column(SQLEnum(BillboardType), default=BillboardType.other, nullable=False)
     location_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -112,7 +113,11 @@ class Contract(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_urls: Mapped[list[str] | None] = mapped_column(SQLiteJSON, nullable=True)
     photo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    designer_project_link: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onedrive_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    graphics_update_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
