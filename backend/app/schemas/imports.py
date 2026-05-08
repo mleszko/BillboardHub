@@ -7,6 +7,7 @@ CANONICAL_FIELDS = [
     "property_owner_name",
     "billboard_code",
     "asset_name",
+    "display_name",
     "billboard_type",
     "surface_size",
     "location_address",
@@ -26,6 +27,7 @@ CANONICAL_FIELDS = [
     "contact_phone",
     "contact_email",
     "notes",
+    "graphics_update_date",
 ]
 REQUIRED_IMPORT_FIELDS = {"advertiser_name", "expiry_date"}
 
@@ -150,6 +152,7 @@ class ContractsListItem(BaseModel):
     contract_number: str | None
     billboard_code: str | None = None
     asset_name: str | None = None
+    display_name: str | None = None
     billboard_type: str | None = None
     advertiser_name: str
     property_owner_name: str | None = None
@@ -171,6 +174,10 @@ class ContractsListItem(BaseModel):
     contact_email: str | None = None
     notes: str | None = None
     photo_url: str | None = None
+    photo_urls: list[str] | None = None
+    designer_project_link: str | None = None
+    onedrive_url: str | None = None
+    graphics_update_date: str | None = None
 
 
 class ContractCustomColumnItem(BaseModel):
@@ -211,4 +218,3 @@ class ContractCustomColumnCreateResponse(BaseModel):
 
 class ContractCustomColumnsListResponse(BaseModel):
     items: list[ContractCustomColumnItem]
-
